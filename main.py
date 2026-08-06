@@ -6,7 +6,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 def main():
-    print("بدأ تشغيل سكربت جلب المباريات المطور...")
+    print("بدأ تشغيل سكربت جلب المباريات المطور عبر الـ API...")
 
     firebase_cert_string = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
     if not firebase_cert_string:
@@ -23,7 +23,7 @@ def main():
     collection_ref = db.collection('daily_matches')
 
     today = datetime.now().strftime("%Y-%m-%d")
-    print(f"جاري جلب مباريات ليوم {today}...")
+    print(f"جاري جلب مباريات ليوم {today} عبر الـ API...")
     
     url = f"https://api.football-data.org/v4/matches?date={today}"
     headers = {
@@ -33,13 +33,13 @@ def main():
     try:
         response = requests.get(url, headers=headers)
         if response.status_code != 200:
-            print(f"فشل جلب البيانات، رمز الاستجابة: {response.status_code}")
+            print(f"فشل جلب البيانات من الـ API، رمز الاستجابة: {response.status_code}")
             return
             
         data = response.json()
         matches_list = data.get('matches', [])
     except Exception as e:
-        print(f"فشل الاتصال بالـ API: {e}")
+        print(fونا فشل الاتصال بالـ API: {e}")
         return
 
     matches_data = []

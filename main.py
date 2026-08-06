@@ -8,7 +8,6 @@ from firebase_admin import credentials, firestore
 def main():
     print("بدأ تشغيل سكربت جلب المباريات المطور...")
 
-    # 1. الاتصال بقاعدة بيانات فايربيس
     firebase_cert_string = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
     if not firebase_cert_string:
         print("خطأ: لم يتم العثور على مفتاح فايربيس السري")
@@ -23,7 +22,6 @@ def main():
     db = firestore.client()
     collection_ref = db.collection('daily_matches')
 
-    # 2. جلب مباريات اليوم باستخدام API رياضي مستقر
     today = datetime.now().strftime("%Y-%m-%d")
     print(f"جاري جلب مباريات ليوم {today}...")
     
@@ -76,7 +74,6 @@ def main():
 
     print(f"تم العثور على {len(matches_data)} مباراة.")
 
-    # 3. تحديث فايربيس
     if matches_data:
         docs = collection_ref.stream()
         for doc in docs:

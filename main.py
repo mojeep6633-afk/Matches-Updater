@@ -1,13 +1,12 @@
 import os
 import json
 import requests
-from bs4 import BeautifulSoup
 from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, firestore
 
 def main():
-    print("بدأ تشغيل سكربت جلب المباريات...")
+    print("بدأ تشغيل سكربت جلب المباريات المطور (API)...")
 
     # 1. الاتصال بقاعدة بيانات فايربيس
     firebase_cert_string = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
@@ -24,98 +23,77 @@ def main():
     db = firestore.client()
     collection_ref = db.collection('daily_matches')
 
-    # 2. الاتصال بالموقع الرياضي لسحب مباريات اليوم
-    today = datetime.now().strftime("%m-%d-%Y")
-    url = f"https://www.yallakora.com/match-center/?date={today}"
+    # 2. جلب مباريات اليوم باستخدام API رياضي مستقر
+    today = datetime.now().strftime("%Y-%m-%d")
+    print(f"جاري جلب مباريات ليوم {today}...")
     
+    # سنستخدم هنا مصدر API مجاني وعالمي للمباريات (Football-Data أو ما يعادله)
+    # ملاحظة: يمكنك وضع مفتاح مجاني من موقع football-data.org لاحقاً إن أردت، أو استخدام رابط عام
+    url = f"https://api.football-data.org/v4/matches?date={today}"
+    
+    # إذا كنت تستخدم مفتاح API خاص بك، ضع الهيدر التالي (اختياري حالياً):
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'X-Auth-Token': os.environ.get('FOOTBALL_DATA_API_KEY', '') 
     }
 
-    print(f"جاري قراءة المباريات ليوم {today}...")
     try:
         response = requests.get(url, headers=headers)
-        response.raise_for_status()
+        if response.status_code != 200:
+            print(f"فشل جلب البيانات، رمز الاستجابة: {response.status_code}")
+            return
+            
+        data = response.json()
+        matches_list = data.get('matches', [])
     except Exception as e:
-        print(f"فشل الاتصال بالموقع: {e}")
+        print(f"فشل الاتصال بالـ API: {e}")
         return
 
-    soup = BeautifulSoup(response.text, 'html.parser')
     matches_data = []
 
-    # 3. تحليل الصفحة واستخراج بيانات الأندية والبطولات بأمان تام
-    championships = soup.find_all('div', class_='matchCard')
-    
-    for champ in championships:
+    for match in matches_list:
         try:
-            league_title = champ.find('div', class_='title')
-            league_name = league_title.find('h2').text.strip() if league_title and league_title.find('h2') else "بطولة غير معروفة"
+            home_team = match['homeTeam']['name']
+            away_team = match['awayTeam']['name']
+            league_name = match['competition']['name']
             
-            matches_list = champ.find_all('div', class_='item')
+            # استخراج الوقت بصيغة سريعة
+            utc_time = match['utcDate'] # مثال: 2026-08-06T19:00:00Z
+            time_only = utc_time.split('T')[1][:5] if 'T' in utc_time else "غير محدد"
             
-            for match in matches_list:
-                try:
-                    teams = match.find_all('div', class_='team')
-                    if len(teams) < 2:
-                        continue # تخطي المباريات التي لا تحتوي على طرفين مكتملين
-                        
-                    home_tag = teams[0].find('p')
-                    away_tag = teams[1].find('p')
-                    
-                    if not home_tag or not away_tag:
-                        continue
+            match_id = f"{home_team}_{away_team}".replace(" ", "_")
 
-                    home_team = home_tag.text.strip()
-                    away_team = away_tag.text.strip()
-                    
-                    home_img = teams[0].find('img')
-                    away_img = teams[1].find('img')
-                    home_logo = home_img['src'] if home_img and 'src' in home_img else ""
-                    away_logo = away_img['src'] if away_img and 'src' in away_img else ""
-                    
-                    match_time_div = match.find('span', class_='time')
-                    match_time = match_time_div.text.strip() if match_time_div else "غير محدد"
-                    
-                    channel_div = match.find('div', class_='channel')
-                    channel_name = channel_div.text.strip() if channel_div else "غير محددة"
-                    
-                    match_id = f"{home_team}_{away_team}".replace(" ", "_")
-
-                    match_info = {
-                        "homeTeam": home_team,
-                        "homeTeamLogo": home_logo,
-                        "awayTeam": away_team,
-                        "awayTeamLogo": away_logo,
-                        "time": match_time,
-                        "league": league_name,
-                        "channelName": channel_name,
-                        "channelLogo": "",
-                        "channelId": abs(hash(match_id)) % (10 ** 8),
-                        "timestamp": firestore.SERVER_TIMESTAMP
-                    }
-                    matches_data.append((match_id, match_info))
-                except Exception as match_err:
-                    print(f"تخطي مباراة بسبب خطأ جزئي: {match_err}")
-                    continue
-        except Exception as champ_err:
-            print(f"تخطي بطولة بسبب خطأ في القراءة: {champ_err}")
+            match_info = {
+                "homeTeam": home_team,
+                "homeTeamLogo": match['homeTeam'].get('crest', ''),
+                "awayTeam": away_team,
+                "awayTeamLogo": match['awayTeam'].get('crest', ''),
+                "time": time_only,
+                "league": league_name,
+                "channelName": "beIN Sports", # قناة افتراضية أو يمكن تخصيصها
+                "channelLogo": "",
+                "channelId": abs(hash(match_id)) % (10 ** 8),
+                "timestamp": firestore.SERVER_TIMESTAMP
+            }
+            matches_data.append((match_id, match_info))
+        except Exception as match_err:
+            print(f"تخطي مباراة بسبب خطأ في البيانات: {match_err}")
             continue
 
-    print(f"تم العثور على {len(matches_data)} مباراة سارية.")
+    print(f"تم العثور على {len(matches_data)} مباراة.")
 
-    # 4. تحديث فايربيس (مسح القديم وإضافة الجديد)
+    # 3. تحديث فايربيس (مسح القديم وإضافة الجديد)
     if matches_data:
         docs = collection_ref.stream()
         for doc in docs:
             doc.reference.delete()
-        print("تم مسح بيانات الأمس القديمة.")
+        print("تم مسح البيانات القديمة.")
 
         for match_id, match_info in matches_data:
             collection_ref.document(str(match_id)).set(match_info)
             
-        print("تم تحديث المباريات في فايربيس بنجاح! 🚀")
+        print("تم تحديث المباريات في فايربيس بنجاح وثبات تامة! 🚀")
     else:
-        print("لم يتم العثور على مباريات صالحة لتحديثها اليوم.")
+        print("لم يتم العثور على مباريات اليوم عبر الـ API.")
 
 if __name__ == "__main__":
     main()

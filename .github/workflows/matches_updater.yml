@@ -1,4 +1,4 @@
-Name: Update Daily Matches
+name: Update Daily Matches
 
 on:
   schedule:

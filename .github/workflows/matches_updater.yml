@@ -1,4 +1,4 @@
-name: Update Daily Matches
+Name: Update Daily Matches
 
 on:
   schedule:
@@ -21,7 +21,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 firebase-admin
+          pip install requests beautifulsoup4 firebase-admin pytz
 
       - name: Run Python Script
         env:

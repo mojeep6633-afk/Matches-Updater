@@ -1,114 +1,29 @@
-import os
-import json
-import requests
-from datetime import datetime
-import pytz
-import firebase_admin
-from firebase_admin import credentials, firestore
+name: Update Daily Matches
 
-def get_todays_matches():
-    today_date = datetime.now().strftime('%Y-%m-%d')
-    url = f"https://api.filgoal.com/api/matches/GetByDate?date={today_date}"
-    
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
-    }
-    
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        matches_data = response.json()
-        
-        cairo_tz = pytz.timezone('Africa/Cairo')
-        riyadh_tz = pytz.timezone('Asia/Riyadh') # إجبار التوقيت ليكون بتوقيت السعودية لتفادي أخطاء جيت هاب
-        
-        clean_matches = []
-        
-        # تصفية البطولات المهمة فقط للحفاظ على ترتيب واجهة الـ 20 بطاقة
-        important_leagues = ["دوري روشن السعودي", "دوري أبطال أوروبا", "دوري أبطال آسيا", "الدوري الإنجليزي", "الدوري الإسباني", "الدوري الإيطالي", "مباريات دولية", "كأس العالم", "دوري أبطال إفريقيا"]
-        
-        for match in matches_data:
-            champ_name = match.get('ChampionshipName', 'بطولة غير معروفة')
-            
-            # تخطي البطولات غير المهمة
-            if not any(league in champ_name for league in important_leagues):
-                continue
+on:
+  schedule:
+    - cron: '0 */2 * * *'
+  workflow_dispatch: 
 
-            home_team = match.get('HomeTeamName', 'فريق 1')
-            away_team = match.get('AwayTeamName', 'فريق 2')
-            
-            home_logo = match.get('HomeTeamLogoUrl', '')
-            if home_logo and not home_logo.startswith('http'):
-                home_logo = f"https://www.filgoal.com{home_logo}"
-                
-            away_logo = match.get('AwayTeamLogoUrl', '')
-            if away_logo and not away_logo.startswith('http'):
-                away_logo = f"https://www.filgoal.com{away_logo}"
-                
-            channel = match.get('ChannelName', 'غير متوفر')
-            
-            # معالجة التوقيت
-            match_date_str = match.get('Date') 
-            if match_date_str:
-                match_time_obj = datetime.strptime(match_date_str[:19], '%Y-%m-%dT%H:%M:%S')
-                match_time_cairo = cairo_tz.localize(match_time_obj)
-                local_match_time = match_time_cairo.astimezone(riyadh_tz)
-                # استخدام صيغة 24 ساعة (مثال: 21:00) لأنها أسهل برمجياً لعمل مؤشر "مباشر" النابض
-                final_time = local_match_time.strftime('%H:%M')
-            else:
-                final_time = "غير محدد"
+jobs:
+  update-matches:
+    runs-on: ubuntu-latest
 
-            match_id = f"{home_team}_{away_team}".replace(" ", "_")
-            
-            # تجهيز البيانات للإرسال إلى فايربيس
-            clean_matches.append((match_id, {
-                "league": champ_name,
-                "homeTeam": home_team,
-                "awayTeam": away_team,
-                "time": final_time,
-                "channelName": channel,
-                "homeTeamLogo": home_logo,
-                "awayTeamLogo": away_logo,
-                "timestamp": firestore.SERVER_TIMESTAMP
-            }))
-            
-        return clean_matches
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
-    except Exception as e:
-        print(f"حدث خطأ أثناء جلب البيانات: {e}")
-        return None
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-def update_firebase(matches):
-    if not matches:
-        print("لا توجد مباريات مهمة اليوم أو حدث خطأ.")
-        return
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4 firebase-admin pytz
 
-    firebase_cert_string = os.environ.get('FIREBASE_SERVICE_ACCOUNT')
-    if not firebase_cert_string:
-        print("خطأ: لم يتم العثور على مفتاح فايربيس السري في إعدادات جيت هاب")
-        return
-        
-    firebase_cert = json.loads(firebase_cert_string)
-    cred = credentials.Certificate(firebase_cert)
-    
-    if not firebase_admin._apps:
-        firebase_admin.initialize_app(cred)
-        
-    db = firestore.client()
-    collection_ref = db.collection('daily_matches')
-    
-    # 1. مسح المباريات القديمة لتبقى الواجهة نظيفة
-    docs = collection_ref.stream()
-    for doc in docs:
-        doc.reference.delete()
-        
-    # 2. إضافة مباريات اليوم المفلترة
-    for match_id, match_data in matches:
-        collection_ref.document(str(match_id)).set(match_data)
-        
-    print(f"تم تحديث فايربيس بنجاح بـ {len(matches)} مباراة مهمة!")
-
-if __name__ == "__main__":
-    print("بدأ سحب وتجهيز جدول المباريات...")
-    todays_matches = get_todays_matches()
-    update_firebase(todays_matches)
+      - name: Run Python Script
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: python main.py

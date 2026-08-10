@@ -7,7 +7,6 @@ import pytz
 import requests
 from firebase_admin import credentials, firestore
 
-
 def get_todays_matches():
     today_date = datetime.now().strftime("%Y-%m-%d")
     url = f"https://api.filgoal.com/api/matches/GetByDate?date={today_date}"
@@ -29,29 +28,35 @@ def get_todays_matches():
 
         clean_matches = []
 
-        # تم إضافة الكلمات المفتاحية للمباريات الودية هنا
+        # القائمة المعتمدة مع إضافة تنويعات الهمزات للحماية من أخطاء الموقع
         important_leagues = [
             "دوري روشن السعودي",
-            "دوري أبطال أوروبا",
-            "دوري أبطال آسيا",
-            "الدوري الإنجليزي",
-            "الدوري الإسباني",
-            "الدوري الإيطالي",
+            "كأس خادم الحرمين الشريفين", "كاس خادم الحرمين الشريفين",
+            "دوري أبطال أوروبا", "دوري ابطال اوروبا",
+            "دوري أبطال آسيا", "دوري ابطال اسيا",
+            "الدوري الإنجليزي", "الدوري الانجليزي",
+            "الدوري الإسباني", "الدوري الاسباني",
+            "الدوري الإيطالي", "الدوري الايطالي",
             "مباريات دولية",
-            "دوري أبطال آسيا للنخبة",
-            "كأس العالم",
-            "دوري أبطال إفريقيا",
+            "دوري أبطال آسيا للنخبة", "دوري ابطال اسيا للنخبة",
+            "كأس العالم", "كاس العالم",
+            "كأس السوبر", "كاس السوبر",
+            "دوري أبطال إفريقيا", "دوري ابطال افريقيا",
+            "دوري يلو",
             "ودي",
             "ودية",
             "مباريات ودية",
             "ودية أندية",
-            "مباريات ودية - أندية",
+            "مباريات ودية - أندية"
         ]
 
         for match in matches_data:
             champ_name = match.get("ChampionshipName", "بطولة غير معروفة")
 
-            if not any(league in champ_name for league in important_leagues):
+            # التحقق: هل اسم البطولة يحتوي على أي من الكلمات المعتمدة في القائمة؟
+            is_important_league = any(league in champ_name for league in important_leagues)
+            
+            if not is_important_league:
                 continue
 
             home_team = match.get("HomeTeamName", "فريق 1")
@@ -102,7 +107,6 @@ def get_todays_matches():
         print(f"حدث خطأ أثناء جلب البيانات: {e}")
         return None
 
-
 def update_firebase(matches):
     if not matches:
         print("لا توجد مباريات مهمة اليوم أو حدث خطأ.")
@@ -130,7 +134,6 @@ def update_firebase(matches):
         collection_ref.document(str(match_id)).set(match_data)
 
     print(f"تم تحديث فايربيس بنجاح بـ {len(matches)} مباراة مهمة!")
-
 
 if __name__ == "__main__":
     print("بدأ سحب وتجهيز جدول المباريات...")

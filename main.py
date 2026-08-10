@@ -8,7 +8,10 @@ import requests
 from firebase_admin import credentials, firestore
 
 def get_todays_matches():
-    today_date = datetime.now().strftime("%Y-%m-%d")
+    # 🔴 التعديل هنا: إجبار السيرفر على استخدام تاريخ اليوم بتوقيت السعودية
+    riyadh_tz = pytz.timezone("Asia/Riyadh")
+    today_date = datetime.now(riyadh_tz).strftime("%Y-%m-%d")
+    
     url = f"https://api.filgoal.com/api/matches/GetByDate?date={today_date}"
 
     headers = {
@@ -24,11 +27,10 @@ def get_todays_matches():
         matches_data = response.json()
 
         cairo_tz = pytz.timezone("Africa/Cairo")
-        riyadh_tz = pytz.timezone("Asia/Riyadh")
 
         clean_matches = []
 
-        # القائمة المعتمدة مع إضافة تنويعات الهمزات للحماية من أخطاء الموقع
+        # القائمة المعتمدة مع إضافة تنويعات الهمزات
         important_leagues = [
             "دوري روشن السعودي",
             "كأس خادم الحرمين الشريفين", "كاس خادم الحرمين الشريفين",
@@ -53,7 +55,6 @@ def get_todays_matches():
         for match in matches_data:
             champ_name = match.get("ChampionshipName", "بطولة غير معروفة")
 
-            # التحقق: هل اسم البطولة يحتوي على أي من الكلمات المعتمدة في القائمة؟
             is_important_league = any(league in champ_name for league in important_leagues)
             
             if not is_important_league:

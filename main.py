@@ -105,10 +105,8 @@ def update_firebase(matches_list):
 
     db = firestore.client()
     
-    # 🔴 هنا التعديل الأهم: إرسال البيانات لنفس المسار الذي يقرأ منه تطبيق الأندرويد 🔴
+    # 🔴 هذا هو السطر الحاسم الذي يضع البيانات في المصفوفة "matches"
     doc_ref = db.collection("koora").document("daily_matches")
-
-    # نرسل المصفوفة كاملة داخل متغير اسمه "matches" كما يتوقع كود الأندرويد
     doc_ref.set({"matches": matches_list})
 
     print(f"تم تحديث فايربيس بنجاح بـ {len(matches_list)} مباراة مهمة!")

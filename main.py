@@ -1,33 +1,57 @@
 import os
 import json
 import requests
-from bs4 import BeautifulSoup
+from datetime import datetime
 import firebase_admin
 from firebase_admin import credentials, firestore
+import pytz
 
 def fetch_matches():
-    # ضع هنا رابط الموقع الذي تجلب منه المباريات
-    url = "رابط_موقع_المباريات_هنا"
-    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    # استدعاء مفتاح الـ API من جيت هاب
+    api_key = os.environ.get("API_SPORTS_KEY")
+    if not api_key:
+        print("خطأ: مفتاح API-Sports غير موجود")
+        return []
+
+    tz = pytz.timezone('Asia/Riyadh')
+    today = datetime.now(tz).strftime("%Y-%m-%d")
+
+    # الرابط الرسمي المباشر لـ API-Sports
+    url = "https://v3.football.api-sports.io/fixtures"
     
-    matches = []
+    # 307 = دوري روشن، 2026 = الموسم
+    querystring = {"date": today, "league": "307", "season": "2026"}
+
+    headers = {
+        "x-apisports-key": api_key
+    }
+
+    matches_list = []
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, params=querystring)
         if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            # استخرج المباريات حسب تصميم الموقع لديك وأضفها للقائمة
-            # مثال افتراضي:
-            # for match in soup.find_all('div', class_='match-item'):
-            #     matches.append({"title": match.text})
+            data = response.json()
+            fixtures = data.get("response", [])
+            
+            for item in fixtures:
+                match_data = {
+                    "home_team": item["teams"]["home"]["name"],
+                    "away_team": item["teams"]["away"]["name"],
+                    "status": item["fixture"]["status"]["long"],
+                    "goals_home": item["goals"]["home"],
+                    "goals_away": item["goals"]["away"],
+                    "match_time": item["fixture"]["date"]
+                }
+                matches_list.append(match_data)
     except Exception as e:
-        print(f"خطأ أثناء جلب المباريات: {e}")
+        print(f"حدث خطأ أثناء جلب المباريات: {e}")
         
-    return matches
+    return matches_list
 
 def update_firebase(matches):
     firebase_cert_string = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
     if not firebase_cert_string:
-        print("خطأ: مفتاح فايربيس غير موجود في إعدادات جيت هاب")
+        print("خطأ: مفتاح فايربيس غير موجود")
         return
 
     try:
@@ -39,17 +63,16 @@ def update_firebase(matches):
 
         db = firestore.client()
         
-        # حفظ المباريات في قاعدة البيانات
         db.collection("koora").document("daily_matches").set({
             "matches": matches,
             "last_update": firestore.SERVER_TIMESTAMP
         })
-        print("تم تحديث وحفظ المباريات في فايربيس بنجاح تام!")
+        print(f"تم حفظ وتحديث {len(matches)} مباريات بنجاح!")
         
     except Exception as e:
-        print(f"فشل الاتصال أو الكتابة في فايربيس بسبب الخطأ التالي: {e}")
+        print(f"فشل الاتصال بفايربيس: {e}")
 
 if __name__ == "__main__":
-    print("جاري بدء جلب المباريات...")
+    print("جاري جلب المباريات...")
     matches_data = fetch_matches()
     update_firebase(matches_data)

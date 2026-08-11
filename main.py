@@ -12,7 +12,7 @@ def get_todays_matches():
     now_riyadh = datetime.now(riyadh_tz)
     today_date = now_riyadh.strftime("%Y-%m-%d")
     
-    print(f"جاري سحب مباريات تاريخ: {today_date} بتوقيت السعودية...")
+    print(f"جاري سحب جميع مباريات تاريخ: {today_date} بدون أي شروط...")
     
     url = f"https://api.filgoal.com/api/matches/GetByDate?date={today_date}"
 
@@ -29,42 +29,15 @@ def get_todays_matches():
         matches_data = response.json()
 
         cairo_tz = pytz.timezone("Africa/Cairo")
-
         clean_matches = []
 
-        important_leagues = [
-            "دوري روشن السعودي",
-            "كأس خادم الحرمين الشريفين", "كاس خادم الحرمين الشريفين",
-            "دوري أبطال أوروبا", "دوري ابطال اوروبا",
-            "دوري أبطال آسيا", "دوري ابطال اسيا",
-            "الدوري الإنجليزي", "الدوري الانجليزي",
-            "الدوري الإسباني", "الدوري الاسباني",
-            "الدوري الإيطالي", "الدوري الايطالي",
-            "مباريات دولية",
-            "دوري أبطال آسيا للنخبة", "دوري ابطال اسيا للنخبة",
-            "كأس العالم", "كاس العالم",
-            "كأس السوبر", "كاس السوبر",
-            "دوري أبطال إفريقيا", "دوري ابطال افريقيا",
-            "دوري يلو",
-            "ودي",
-            "ودية",
-            "مباريات ودية",
-            "ودية أندية",
-            "مباريات ودية - أندية"
-        ]
-
+        # 🔴 تم إزالة جميع شروط وفلاتر البطولات نهائياً (سحب شامل لكل مباريات الكوكب)
         for match in matches_data:
             champ_name = match.get("ChampionshipName", "بطولة غير معروفة")
             home_team = match.get("HomeTeamName", "فريق 1")
             away_team = match.get("AwayTeamName", "فريق 2")
 
-            is_important_league = any(league in champ_name for league in important_leagues)
-            
-            if not is_important_league:
-                print(f"تم تجاهل: {champ_name} ({home_team} ضد {away_team})")
-                continue
-
-            print(f"تم اعتماد: {champ_name} ({home_team} ضد {away_team})")
+            print(f"تم اعتماد المباراة: {champ_name} ({home_team} ضد {away_team})")
 
             home_logo = match.get("HomeTeamLogoUrl", "")
             if home_logo and not home_logo.startswith("http"):
@@ -113,7 +86,7 @@ def get_todays_matches():
 
 def update_firebase(matches):
     if not matches:
-        print("لا توجد مباريات مهمة اليوم (حسب القائمة المعتمدة).")
+        print("لا توجد أي مباريات مسجلة اليوم في المصدر.")
         return
 
     firebase_cert_string = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
@@ -128,8 +101,6 @@ def update_firebase(matches):
         firebase_admin.initialize_app(cred)
 
     db = firestore.client()
-    
-    # مربوط مباشرة على مجموعة koora
     collection_ref = db.collection("koora")
 
     docs = collection_ref.stream()
@@ -139,9 +110,9 @@ def update_firebase(matches):
     for match_id, match_data in matches:
         collection_ref.document(str(match_id)).set(match_data)
 
-    print(f"تم تحديث فايربيس بنجاح بـ {len(matches)} مباراة مهمة!")
+    print(f"تم تحديث فايربيس بنجاح بـ {len(matches)} مباراة (كل مباريات اليوم بدون استثناء)!")
 
 if __name__ == "__main__":
-    print("بدأ سحب وتجهيز جدول المباريات...")
+    print("بدأ سحب وتجهيز جدول كل المباريات...")
     todays_matches = get_todays_matches()
     update_firebase(todays_matches)

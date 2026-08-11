@@ -25,5 +25,6 @@ jobs:
       - name: Run Python script
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          API_SPORTS_KEY: ${{ secrets.API_SPORTS_KEY }}
         run: |
           python main.py

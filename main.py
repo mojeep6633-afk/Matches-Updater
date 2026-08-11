@@ -12,7 +12,7 @@ def get_todays_matches():
     riyadh_tz = pytz.timezone("Asia/Riyadh")
     today_date = datetime.now(riyadh_tz).strftime("%Y-%m-%d")
     
-    print(f"بدء جلب المباريات ليوم: {today_date} من موقع في الجول...")
+    print(f"جاري سحب جدول مباريات اليوم: {today_date}...")
     
     url = "https://www.filgoal.com/matches"
     headers = {
@@ -21,7 +21,6 @@ def get_todays_matches():
 
     try:
         response = requests.get(url, headers=headers)
-        print(f"حالة الاتصال بالموقع: {response.status_code}")
         response.raise_for_status()
 
         soup = BeautifulSoup(response.text, "html.parser")
@@ -37,12 +36,9 @@ def get_todays_matches():
             "دوري يلو", "ودي", "ودية", "مباريات ودية", "ودية أندية"
         ]
 
-        # البحث عن كتل المباريات في هيكلة الموقع الجديدة
         match_blocks = soup.find_all("div", class_="match-block")
         if not match_blocks:
             match_blocks = soup.find_all("div", class_="ic-match")
-            
-        print(f"عدد كتل المباريات المكتشفة في الصفحة: {len(match_blocks)}")
 
         for block in match_blocks:
             try:
@@ -92,10 +88,14 @@ def get_todays_matches():
         return clean_matches
 
     except Exception as e:
-        print(f"حدث خطأ أثناء جلب الصفحة: {e}")
+        print(f"حدث خطأ أثناء جلب الجدول: {e}")
         return None
 
 def update_firebase(matches):
+    if not matches:
+        print("لا توجد مباريات مطابقة للبطولات المهمة اليوم.")
+        return
+
     firebase_cert_string = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
     if not firebase_cert_string:
         print("خطأ: مفتاح فايربيس غير موجود في إعدادات جيت هاب")
@@ -110,30 +110,13 @@ def update_firebase(matches):
     db = firestore.client()
     collection_ref = db.collection("koora")
 
-    # مسح القديم وكتابة الجديد
-    docs = collection_ref.stream()
-    for doc in docs:
-        doc.reference.delete()
+    # تحديث وتثبيت الجدول لليوم
+    for match_id, match_data in matches:
+        collection_ref.document(str(match_id)).set(match_data)
 
-    if matches:
-        for match_id, match_data in matches:
-            collection_ref.document(str(match_id)).set(match_data)
-        print(f"تم رفع {len(matches)} مباراة بنجاح إلى مجموعة koora.")
-    else:
-        # إضافة وثيقة اختبارية لضمان عمل قاعدة البيانات وعدم بقائها فارغة
-        collection_ref.document("test_connection").set({
-            "league": "اختبار النظام",
-            "homeTeam": "حالة السكربت",
-            "awayTeam": "متصل بنجاح",
-            "time": "00:00",
-            "channelName": "مباشر",
-            "homeTeamLogo": "",
-            "awayTeamLogo": "",
-            "timestamp": firestore.SERVER_TIMESTAMP
-        })
-        print("لم يتم العثور على مباريات مطابقة حالياً، وتم إنشاء وثيقة اختبارية لضمان عمل الاتصال.")
+    print(f"تم تثبيت جدول مباريات اليوم بـ {len(matches)} مباراة في فايربيس بنجاح!")
 
 if __name__ == "__main__":
-    print("بدء تنفيذ السكربت المباشر...")
+    print("بدء تثبيت جدول مباريات اليوم...")
     todays_matches = get_todays_matches()
     update_firebase(todays_matches)

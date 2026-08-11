@@ -19,7 +19,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests firebase-admin pytz
+          pip install requests beautifulsoup4 firebase-admin pytz
 
       - name: Run Python script
         env:

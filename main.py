@@ -8,9 +8,12 @@ import requests
 from firebase_admin import credentials, firestore
 
 def get_todays_matches():
-    # 🔴 التعديل هنا: إجبار السيرفر على استخدام تاريخ اليوم بتوقيت السعودية
+    # الاعتماد على توقيت السعودية بشكل صارم (اليوم يبدأ 12:00 ليلاً)
     riyadh_tz = pytz.timezone("Asia/Riyadh")
-    today_date = datetime.now(riyadh_tz).strftime("%Y-%m-%d")
+    now_riyadh = datetime.now(riyadh_tz)
+    today_date = now_riyadh.strftime("%Y-%m-%d")
+    
+    print(f"جاري سحب مباريات تاريخ: {today_date} بتوقيت السعودية...")
     
     url = f"https://api.filgoal.com/api/matches/GetByDate?date={today_date}"
 
@@ -30,7 +33,7 @@ def get_todays_matches():
 
         clean_matches = []
 
-        # القائمة المعتمدة مع إضافة تنويعات الهمزات
+        # القائمة المعتمدة مع تنويعات الهمزات
         important_leagues = [
             "دوري روشن السعودي",
             "كأس خادم الحرمين الشريفين", "كاس خادم الحرمين الشريفين",
@@ -54,14 +57,17 @@ def get_todays_matches():
 
         for match in matches_data:
             champ_name = match.get("ChampionshipName", "بطولة غير معروفة")
+            home_team = match.get("HomeTeamName", "فريق 1")
+            away_team = match.get("AwayTeamName", "فريق 2")
 
             is_important_league = any(league in champ_name for league in important_leagues)
             
             if not is_important_league:
+                # هذه الرسالة ستظهر في جيت هاب لتعرف لماذا تم تجاهل المباراة
+                print(f"تم تجاهل: {champ_name} ({home_team} ضد {away_team})")
                 continue
 
-            home_team = match.get("HomeTeamName", "فريق 1")
-            away_team = match.get("AwayTeamName", "فريق 2")
+            print(f"تم اعتماد: {champ_name} ({home_team} ضد {away_team})")
 
             home_logo = match.get("HomeTeamLogoUrl", "")
             if home_logo and not home_logo.startswith("http"):
@@ -110,7 +116,7 @@ def get_todays_matches():
 
 def update_firebase(matches):
     if not matches:
-        print("لا توجد مباريات مهمة اليوم أو حدث خطأ.")
+        print("لا توجد مباريات مهمة اليوم (حسب القائمة المعتمدة).")
         return
 
     firebase_cert_string = os.environ.get("FIREBASE_SERVICE_ACCOUNT")

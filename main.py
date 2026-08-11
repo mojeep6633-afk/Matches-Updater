@@ -1,76 +1,105 @@
 import json
 import os
-import requests
-import firebase_admin
-from firebase_admin import credentials, firestore
 from datetime import datetime
-
-# مفتاح الـ API الخاص بك
-API_KEY = "12d594efcd4cf9df22a2dba5067a8254" 
-BASE_URL = "https://v3.football.api-sports.io"
+import firebase_admin
+import pytz
+import requests
+from firebase_admin import credentials, firestore
 
 def get_todays_matches():
+    today_date = datetime.now().strftime("%Y-%m-%d")
+    url = f"https://api.filgoal.com/api/matches/GetByDate?date={today_date}"
+
     headers = {
-        "x-rapidapi-host": "v3.football.api-sports.io",
-        "x-rapidapi-key": API_KEY
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            " (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+        )
     }
-    
-    # جلب مباريات اليوم
-    today = datetime.now().strftime("%Y-%m-%d")
-    
-    # أضفنا توقيت السعودية عشان الأوقات تجي جاهزة ومضبوطة للتطبيق
-    params = {
-        "date": today,
-        "timezone": "Asia/Riyadh" 
-    }
-    
+
     try:
-        response = requests.get(f"{BASE_URL}/fixtures", headers=headers, params=params)
+        response = requests.get(url, headers=headers)
         response.raise_for_status()
-        data = response.json()
-        
-        matches_list = []
-        
-        # حالياً سنسحب كل المباريات للتأكد من وصولها للفايربيس
-        for fixture in data.get("response", []):
-            league = fixture.get("league", {}).get("name", "بطولة غير معروفة")
-            home_team = fixture.get("teams", {}).get("home", {}).get("name", "فريق 1")
-            away_team = fixture.get("teams", {}).get("away", {}).get("name", "فريق 2")
-            home_logo = fixture.get("teams", {}).get("home", {}).get("logo", "")
-            away_logo = fixture.get("teams", {}).get("away", {}).get("logo", "")
-            
-            # الوقت يأتي بصيغة جاهزة (ISO 8601) من الـ API
-            match_time = fixture.get("fixture", {}).get("date", "")
-            
-            # هيكلة البيانات كما يتوقعها تطبيق الأندرويد تماماً
-            matches_list.append({
-                "league_name": league,
+        matches_data = response.json()
+
+        cairo_tz = pytz.timezone("Africa/Cairo")
+        riyadh_tz = pytz.timezone("Asia/Riyadh")
+
+        clean_matches = []
+
+        # قائمة البطولات التي سيتم عرضها في التطبيق
+        important_leagues = [
+            "دوري روشن السعودي", "دوري أبطال أوروبا", "دوري أبطال آسيا",
+            "الدوري الإنجليزي", "الدوري الإسباني", "الدوري الإيطالي",
+            "مباريات دولية", "دوري أبطال آسيا للنخبة", "كأس العالم",
+            "دوري أبطال إفريقيا", "ودي", "ودية", "مباريات ودية",
+            "ودية أندية", "مباريات ودية - أندية"
+        ]
+
+        for match in matches_data:
+            champ_name = match.get("ChampionshipName", "بطولة غير معروفة")
+
+            if not any(league in champ_name for league in important_leagues):
+                continue
+
+            home_team = match.get("HomeTeamName", "فريق 1")
+            away_team = match.get("AwayTeamName", "فريق 2")
+
+            home_logo = match.get("HomeTeamLogoUrl", "")
+            if home_logo and not home_logo.startswith("http"):
+                home_logo = f"https://www.filgoal.com{home_logo}"
+
+            away_logo = match.get("AwayTeamLogoUrl", "")
+            if away_logo and not away_logo.startswith("http"):
+                away_logo = f"https://www.filgoal.com{away_logo}"
+
+            # جلب اسم القناة الناقلة والمعلق
+            channel = match.get("ChannelName", "")
+            if not channel:
+                channel = "غير محدد"
+                
+            commentator = match.get("CommentatorName", "")
+
+            # ضبط الوقت ليكون بتوقيت السعودية
+            match_date_str = match.get("Date")
+            if match_date_str:
+                match_time_obj = datetime.strptime(match_date_str[:19], "%Y-%m-%dT%H:%M:%S")
+                match_time_cairo = cairo_tz.localize(match_time_obj)
+                local_match_time = match_time_cairo.astimezone(riyadh_tz)
+                final_time = local_match_time.strftime("%Y-%m-%dT%H:%M:%S+03:00") 
+            else:
+                final_time = ""
+
+            # هيكلة البيانات بدقة كما يتوقعها التطبيق
+            clean_matches.append({
+                "league_name": champ_name,
                 "home_team": home_team,
                 "away_team": away_team,
-                "match_time": match_time,
+                "match_time": final_time,
                 "home_team_logo": home_logo,
                 "away_team_logo": away_logo,
                 "channels": [
                     {
-                        "name": "غير محدد", # الـ API لا يوفر القنوات، سنتركها كقيمة افتراضية
-                        "commentator": "" 
+                        "name": channel,
+                        "commentator": commentator
                     }
                 ]
             })
-            
-        return matches_list
+
+        return clean_matches
+
     except Exception as e:
-        print(f"خطأ في API-Football: {e}")
-        return []
+        print(f"حدث خطأ أثناء جلب البيانات: {e}")
+        return None
 
 def update_firebase(matches_list):
     if not matches_list:
-        print("لا توجد مباريات اليوم نهائياً.")
+        print("لا توجد مباريات مهمة اليوم في الموقع.")
         return
 
     firebase_cert_string = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
     if not firebase_cert_string:
-        print("خطأ: لم يتم العثور على مفتاح فايربيس السري في إعدادات جيت هاب")
+        print("خطأ: لم يتم العثور على مفتاح فايربيس السري في المتغيرات")
         return
 
     firebase_cert = json.loads(firebase_cert_string)
@@ -81,13 +110,13 @@ def update_firebase(matches_list):
 
     db = firestore.client()
     
-    # 🔴 وضع البيانات في حقل matches كما يتوقع تطبيق الأندرويد
+    # رفع البيانات في مصفوفة matches ليتعرف عليها التطبيق مباشرة
     doc_ref = db.collection("koora").document("daily_matches")
     doc_ref.set({"matches": matches_list})
 
     print(f"تم تحديث فايربيس بنجاح بـ {len(matches_list)} مباراة!")
 
 if __name__ == "__main__":
-    print("بدأ سحب وتجهيز جدول المباريات من API-Football...")
+    print("بدأ سحب وتجهيز جدول المباريات...")
     todays_matches = get_todays_matches()
     update_firebase(todays_matches)

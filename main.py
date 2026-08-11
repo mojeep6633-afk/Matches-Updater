@@ -7,7 +7,6 @@ from firebase_admin import credentials, firestore
 import pytz
 
 def fetch_matches():
-    # استدعاء مفتاح الـ API من جيت هاب
     api_key = os.environ.get("API_SPORTS_KEY")
     if not api_key:
         print("خطأ: مفتاح API-Sports غير موجود")
@@ -16,16 +15,18 @@ def fetch_matches():
     tz = pytz.timezone('Asia/Riyadh')
     today = datetime.now(tz).strftime("%Y-%m-%d")
 
-    # الرابط الرسمي المباشر لـ API-Sports
     url = "https://v3.football.api-sports.io/fixtures"
     
-    # 307 = دوري روشن، 2026 = الموسم
-    querystring = {"date": today, "league": "307", "season": "2026"}
+    # طلب كل مباريات اليوم بدون تحديد دوري معين
+    querystring = {"date": today}
 
     headers = {
         "x-apisports-key": api_key
     }
 
+    # قائمة بأرقام البطولات التي تهمك
+    target_leagues = [307, 308, 310, 2, 17, 18, 39, 140, 135, 12, 1, 66]
+    
     matches_list = []
     try:
         response = requests.get(url, headers=headers, params=querystring)
@@ -34,15 +35,20 @@ def fetch_matches():
             fixtures = data.get("response", [])
             
             for item in fixtures:
-                match_data = {
-                    "home_team": item["teams"]["home"]["name"],
-                    "away_team": item["teams"]["away"]["name"],
-                    "status": item["fixture"]["status"]["long"],
-                    "goals_home": item["goals"]["home"],
-                    "goals_away": item["goals"]["away"],
-                    "match_time": item["fixture"]["date"]
-                }
-                matches_list.append(match_data)
+                league_id = item["league"]["id"]
+                
+                # التحقق مما إذا كانت المباراة ضمن بطولاتنا المطلوبة
+                if league_id in target_leagues:
+                    match_data = {
+                        "league_name": item["league"]["name"],
+                        "home_team": item["teams"]["home"]["name"],
+                        "away_team": item["teams"]["away"]["name"],
+                        "status": item["fixture"]["status"]["long"],
+                        "goals_home": item["goals"]["home"],
+                        "goals_away": item["goals"]["away"],
+                        "match_time": item["fixture"]["date"]
+                    }
+                    matches_list.append(match_data)
     except Exception as e:
         print(f"حدث خطأ أثناء جلب المباريات: {e}")
         

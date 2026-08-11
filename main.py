@@ -8,7 +8,6 @@ import requests
 from firebase_admin import credentials, firestore
 
 def get_todays_matches():
-    # الاعتماد على توقيت السعودية بشكل صارم (اليوم يبدأ 12:00 ليلاً)
     riyadh_tz = pytz.timezone("Asia/Riyadh")
     now_riyadh = datetime.now(riyadh_tz)
     today_date = now_riyadh.strftime("%Y-%m-%d")
@@ -33,7 +32,6 @@ def get_todays_matches():
 
         clean_matches = []
 
-        # القائمة المعتمدة مع تنويعات الهمزات
         important_leagues = [
             "دوري روشن السعودي",
             "كأس خادم الحرمين الشريفين", "كاس خادم الحرمين الشريفين",
@@ -63,7 +61,6 @@ def get_todays_matches():
             is_important_league = any(league in champ_name for league in important_leagues)
             
             if not is_important_league:
-                # هذه الرسالة ستظهر في جيت هاب لتعرف لماذا تم تجاهل المباراة
                 print(f"تم تجاهل: {champ_name} ({home_team} ضد {away_team})")
                 continue
 
@@ -131,7 +128,9 @@ def update_firebase(matches):
         firebase_admin.initialize_app(cred)
 
     db = firestore.client()
-    collection_ref = db.collection("daily_matches")
+    
+    # مربوط مباشرة على مجموعة koora
+    collection_ref = db.collection("koora")
 
     docs = collection_ref.stream()
     for doc in docs:

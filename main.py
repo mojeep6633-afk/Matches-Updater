@@ -6,27 +6,26 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 def fetch_direct_matches():
-    # الرابط الرسمي والداخلي لسيرفر 365Scores (يدعم اللغة العربية والتوقيت السعودي)
     url = "https://webws.365scores.com/web/games/current/?appTypeId=5&langId=27&timezoneName=Asia/Riyadh"
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    print("جاري سحب البيانات من المصدر الرسمي لـ 365Scores مباشرة بدون وسطاء...")
+    print("جاري سحب البيانات من المصدر الرسمي لـ 365Scores مباشرة...")
 
     try:
         response = requests.get(url, headers=headers)
         data = response.json()
 
-        # بناء قواميس برمجية لترجمة المعرفات (IDs) إلى أسماء حقيقية للقنوات والفرق
         competitions_dict = {c['id']: c['name'] for c in data.get('competitions', [])}
         competitors_dict = {c['id']: c['name'] for c in data.get('competitors', [])}
         tv_networks_dict = {tv['id']: tv['name'] for tv in data.get('tvNetworks', [])}
 
+        # تم تحديث الكلمات الدلالية لتطابق اللغة العربية في الـ API الجديد
         target_keywords = [
-            "Saudi", "King", "AFC", "Champions League", "Europa", 
-            "Premier League", "La Liga", "Serie A", "Ligue 1", 
-            "Brasileiro", "Gulf", "السعودي", "الملك", "Leagues Cup"
+            "دوري", "كأس", "بطولة", "الدوري", "الكأس", "ودي", 
+            "آسيا", "أوروبا", "إنجليزي", "أسباني", "إيطالي", 
+            "فرنسي", "سعودي", "خليجي", "Leagues Cup"
         ]
 
         clean_matches = []
@@ -34,19 +33,18 @@ def fetch_direct_matches():
         for game in data.get('games', []):
             comp_name = competitions_dict.get(game.get('competitionId', -1), "")
             
-            # فلترة البطولات
+            # فلترة البطولات بناءً على الأسماء المعربة
             if any(keyword.lower() in comp_name.lower() for keyword in target_keywords):
-                if "Friendly" in comp_name or "ودية" in comp_name:
-                    continue
+                # إذا أردت استبعاد الوديات أزل علامة # من السطرين التاليين
+                # if "ودية" in comp_name or "ودي" in comp_name:
+                #     continue
 
                 home_id = game.get('homeCompetitorId', -1)
                 away_id = game.get('awayCompetitorId', -1)
 
-                # صياغة روابط الشعارات بصيغة PNG صريحة ومبسطة ليقبلها مشغل Xtream فوراً
                 home_logo = f"https://imagecache.365scores.com/image/upload/f_png,w_150/Teams/{home_id}.png"
                 away_logo = f"https://imagecache.365scores.com/image/upload/f_png,w_150/Teams/{away_id}.png"
 
-                # استخراج القنوات الناقلة الفعلية (مهما كان التطبيق أو القناة)
                 channel_names = []
                 for tv in game.get('tvNetworks', []):
                     if isinstance(tv, dict):
@@ -93,7 +91,7 @@ def update_firebase(matches_list):
         db = firestore.client()
         doc_ref = db.collection("koora").document("daily_matches")
         doc_ref.set({"matches": matches_list, "last_updated": datetime.now().isoformat()})
-        print(f"✅ تم تحديث {len(matches_list)} مباراة بنجاح (مع قنوات حقيقية وشعارات PNG)!")
+        print(f"✅ تم تحديث {len(matches_list)} مباراة بنجاح في الفايربيس!")
         
     except Exception as e:
         print(f"خطأ في الفايربيس: {e}")

@@ -6,15 +6,14 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 def get_365scores_matches():
-    # مفتاحك المباشر
     APIFY_TOKEN = "apify_api_yJ5YPMy0T1ecpOB21nFMhUzffI7HYL2P41nU"
     client = ApifyClient(APIFY_TOKEN)
 
-    # المعرف المطابق لصورتك تماماً
     actor_id = "crawlergang/365scores-scraper"
 
+    # تصحيح القيمة لتكون متوافقة مع المتطلبات التقنية للأداة
     run_input = {
-        "mode": "Live scores (today's games)",
+        "mode": "liveScores",
         "sport": "Football (Soccer)",
         "maxItems": 150
     }
@@ -25,7 +24,6 @@ def get_365scores_matches():
         run = client.actor(actor_id).call(run_input=run_input)
         dataset_items = client.dataset(run["defaultDatasetId"]).list().items
         
-        # البطولات المطلوبة بالصيغتين الإنجليزية والعربية
         target_leagues = [
             "Saudi", "Saudi Professional", "King", "Cup", 
             "AFC", "Champions League", "Europa", 
@@ -37,7 +35,6 @@ def get_365scores_matches():
         for match in dataset_items:
             league = match.get("competition", "") or match.get("competitionName", "") or match.get("league", "")
             
-            # فلترة المباريات للبطولات المطلوبة واستبعاد الوديات
             if any(target.lower() in league.lower() for target in target_leagues):
                 if "Friendly" in league or "ودية" in league:
                     continue

@@ -1,6 +1,6 @@
 import requests
 
-url = "https://api-sports.io"
+url = "https://v3.football.api-sports.io/fixtures"
 API_KEY = "12d594efcd4cf9df22a2dba5067a8254"
 
 headers = {

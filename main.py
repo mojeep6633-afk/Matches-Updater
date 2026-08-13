@@ -1,99 +1,87 @@
 import json
 import os
-import time
-from datetime import datetime, timedelta
+from datetime import datetime
 import requests
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-def get_sofascore_matches():
-    # جلب تاريخ اليوم
-    date_today = datetime.now().strftime("%Y-%m-%d")
-    url = f"https://api.sofascore.com/api/v1/sport/football/scheduled-events/{date_today}"
+def get_api_football_matches():
+    # تم دمج المفتاح الخاص بك هنا
+    API_KEY = "12d594efcd4cf9df22a2dba5067a8254"
     
-    # ترويسات قوية لمحاكاة متصفح حقيقي وطلب البيانات باللغة العربية
+    date_today = datetime.now().strftime("%Y-%m-%d")
+    
+    # رابط جلب مباريات اليوم
+    fixtures_url = "https://v3.football.api-sports.io/fixtures"
+    querystring = {"date": date_today, "timezone": "Asia/Riyadh"}
+    
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language": "ar-SA,ar;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Origin": "https://www.sofascore.com",
-        "Referer": "https://www.sofascore.com/"
+        "x-apisports-key": API_KEY
     }
 
-    print(f"جاري سحب مباريات اليوم ({date_today}) من SofaScore المباشر...")
+    print(f"جاري سحب مباريات اليوم ({date_today}) من API-Football...")
 
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(fixtures_url, headers=headers, params=querystring)
         if response.status_code != 200:
-            print(f"فشل الاتصال بالسيرفر. رمز الخطأ: {response.status_code}")
+            print(f"خطأ في الاتصال: {response.status_code}")
             return []
             
         data = response.json()
-        events = data.get("events", [])
+        fixtures = data.get("response", [])
         
-        # الكلمات الدلالية للبطولات اللي طلبتها بالضبط
+        # الكلمات الدلالية للبطولات المستهدفة
         target_keywords = [
-            "سعودي", "محترفين", "ملك", "حرمين", "خليج", "تعاون", 
-            "آسيا", "اسيا", "أوروب", "اوروب", "إنجليز", "انجليز", 
-            "إسبان", "اسبان", "إيطال", "ايطال", "فرنس", "برازيل"
+            "Saudi Pro League", "King Cup", "Gulf", "AFC", 
+            "UEFA Champions League", "UEFA Europa League", 
+            "Premier League", "La Liga", "Primera Division", 
+            "Serie A", "Ligue 1", "Brasileiro"
         ]
         
         clean_matches = []
         
-        for event in events:
-            tournament = event.get("tournament", {})
-            tour_name = tournament.get("name", "")
+        for item in fixtures:
+            league = item.get("league", {})
+            league_name = league.get("name", "")
+            league_country = league.get("country", "")
             
-            # إذا اسم البطولة يحتوي على أي من الكلمات المستهدفة
-            if any(key in tour_name.lower() for key in target_keywords):
+            full_league_name = f"{league_country} {league_name}"
+            
+            if any(keyword.lower() in full_league_name.lower() for keyword in target_keywords):
                 
-                event_id = event.get("id")
-                home_team = event.get("homeTeam", {})
-                away_team = event.get("awayTeam", {})
+                fixture = item.get("fixture", {})
+                fixture_id = fixture.get("id")
+                teams = item.get("teams", {})
                 
-                home_id = home_team.get("id")
-                away_id = away_team.get("id")
-                
-                # روابط صور PNG مباشرة من سيرفرات SofaScore
-                home_logo = f"https://api.sofascore.app/api/v1/team/{home_id}/image" if home_id else ""
-                away_logo = f"https://api.sofascore.app/api/v1/team/{away_id}/image" if away_id else ""
-                
-                # ضبط التوقيت ليكون بتوقيت السعودية (+3)
-                match_timestamp = event.get("startTimestamp")
-                if match_timestamp:
-                    dt = datetime.utcfromtimestamp(match_timestamp) + timedelta(hours=3)
-                    match_time = dt.strftime("%H:%M")
-                else:
-                    match_time = "توقيت غير محدد"
-                    
-                # استخراج القنوات الناقلة بطلب مخصص لكل مباراة
+                date_iso = fixture.get("date", "")
+                match_time = "توقيت غير محدد"
+                if date_iso:
+                    dt_obj = datetime.fromisoformat(date_iso.replace("Z", "+00:00"))
+                    match_time = dt_obj.strftime("%H:%M")
+
                 channel_name = "غير متوفر"
-                if event_id:
-                    tv_url = f"https://api.sofascore.com/api/v1/event/{event_id}/tv-channels"
+                if fixture_id:
+                    tv_url = "https://v3.football.api-sports.io/fixtures/tv"
+                    tv_qs = {"fixture": fixture_id}
                     try:
-                        tv_res = requests.get(tv_url, headers=headers)
+                        tv_res = requests.get(tv_url, headers=headers, params=tv_qs)
                         if tv_res.status_code == 200:
-                            tv_data = tv_res.json()
-                            channels = []
-                            for ch in tv_data.get("tvChannels", []):
-                                ch_name = ch.get("title") or ch.get("tvNetwork", {}).get("name")
-                                if ch_name:
-                                    channels.append(ch_name)
-                            if channels:
-                                channel_name = " | ".join(channels)
+                            tv_data = tv_res.json().get("response", [])
+                            if tv_data:
+                                channels = [ch.get("tv", {}).get("name") for ch in tv_data if ch.get("tv", {}).get("name")]
+                                if channels:
+                                    channel_name = " | ".join(channels)
                     except:
                         pass
-                    
-                    # إيقاف مؤقت بسيط لتجنب حظر السيرفر
-                    time.sleep(0.1)
                 
                 clean_matches.append({
-                    "league_name": tour_name,
-                    "home_team": home_team.get("name", "غير معروف"),
-                    "away_team": away_team.get("name", "غير معروف"),
+                    "league_name": league_name,
+                    "home_team": teams.get("home", {}).get("name", "غير معروف"),
+                    "away_team": teams.get("away", {}).get("name", "غير معروف"),
                     "match_time": match_time,
-                    "home_team_logo": home_logo,
-                    "away_team_logo": away_logo,
-                    "status": "مجدولة",
+                    "home_team_logo": teams.get("home", {}).get("logo", ""),  
+                    "away_team_logo": teams.get("away", {}).get("logo", ""),  
+                    "status": fixture.get("status", {}).get("long", "مجدولة"),
                     "channels": [{"name": channel_name, "commentator": "غير محدد"}]
                 })
                 
@@ -123,11 +111,11 @@ def update_firebase(matches_list):
         db = firestore.client()
         doc_ref = db.collection("koora").document("daily_matches")
         doc_ref.set({"matches": matches_list, "last_updated": datetime.now().isoformat()})
-        print(f"✅ تم تحديث {len(matches_list)} مباراة بنجاح (سيرفر SofaScore)!")
+        print(f"✅ تم تحديث {len(matches_list)} مباراة بنجاح عبر API-Football!")
         
     except Exception as e:
         print(f"خطأ في الفايربيس: {e}")
 
 if __name__ == "__main__":
-    data = get_sofascore_matches()
+    data = get_api_football_matches()
     update_firebase(data)

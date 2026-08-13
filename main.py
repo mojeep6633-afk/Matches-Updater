@@ -11,7 +11,7 @@ def fetch_direct_matches():
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    print("جاري سحب البيانات من المصدر الرسمي لـ 365Scores مباشرة...")
+    print("جاري سحب جميع المباريات من المصدر الرسمي لـ 365Scores (بدون فلاتر)...")
 
     try:
         response = requests.get(url, headers=headers)
@@ -21,49 +21,38 @@ def fetch_direct_matches():
         competitors_dict = {c['id']: c['name'] for c in data.get('competitors', [])}
         tv_networks_dict = {tv['id']: tv['name'] for tv in data.get('tvNetworks', [])}
 
-        # تم تحديث الكلمات الدلالية لتطابق اللغة العربية في الـ API الجديد
-        target_keywords = [
-            "دوري", "كأس", "بطولة", "الدوري", "الكأس", "ودي", 
-            "آسيا", "أوروبا", "إنجليزي", "أسباني", "إيطالي", 
-            "فرنسي", "سعودي", "خليجي", "Leagues Cup"
-        ]
-
         clean_matches = []
         
         for game in data.get('games', []):
-            comp_name = competitions_dict.get(game.get('competitionId', -1), "")
+            comp_name = competitions_dict.get(game.get('competitionId', -1), "بطولة غير معروفة")
             
-            # فلترة البطولات بناءً على الأسماء المعربة
-            if any(keyword.lower() in comp_name.lower() for keyword in target_keywords):
-                # إذا أردت استبعاد الوديات أزل علامة # من السطرين التاليين
-                # if "ودية" in comp_name or "ودي" in comp_name:
-                #     continue
+            home_id = game.get('homeCompetitorId', -1)
+            away_id = game.get('awayCompetitorId', -1)
 
-                home_id = game.get('homeCompetitorId', -1)
-                away_id = game.get('awayCompetitorId', -1)
+            # سحب الشعارات بصيغة PNG صريحة ومباشرة
+            home_logo = f"https://imagecache.365scores.com/image/upload/f_png,w_150/Teams/{home_id}.png" if home_id != -1 else ""
+            away_logo = f"https://imagecache.365scores.com/image/upload/f_png,w_150/Teams/{away_id}.png" if away_id != -1 else ""
 
-                home_logo = f"https://imagecache.365scores.com/image/upload/f_png,w_150/Teams/{home_id}.png"
-                away_logo = f"https://imagecache.365scores.com/image/upload/f_png,w_150/Teams/{away_id}.png"
+            # استخراج القنوات الناقلة الفعلية الحقيقية من بيانات المباراة
+            channel_names = []
+            for tv in game.get('tvNetworks', []):
+                if isinstance(tv, dict):
+                    channel_names.append(tv.get('name', ''))
+                else:
+                    channel_names.append(tv_networks_dict.get(tv, ''))
+            
+            final_channel = " | ".join(filter(None, channel_names)) if channel_names else "غير متوفر"
 
-                channel_names = []
-                for tv in game.get('tvNetworks', []):
-                    if isinstance(tv, dict):
-                        channel_names.append(tv.get('name', ''))
-                    else:
-                        channel_names.append(tv_networks_dict.get(tv, ''))
-                
-                final_channel = " | ".join(filter(None, channel_names)) if channel_names else "غير متوفر"
-
-                clean_matches.append({
-                    "league_name": comp_name,
-                    "home_team": competitors_dict.get(home_id, "غير معروف"),
-                    "away_team": competitors_dict.get(away_id, "غير معروف"),
-                    "match_time": game.get('startTime', "توقيت غير محدد"),
-                    "home_team_logo": home_logo,
-                    "away_team_logo": away_logo,
-                    "status": "مجدولة",
-                    "channels": [{"name": final_channel, "commentator": "غير محدد"}]
-                })
+            clean_matches.append({
+                "league_name": comp_name,
+                "home_team": competitors_dict.get(home_id, "غير معروف"),
+                "away_team": competitors_dict.get(away_id, "غير معروف"),
+                "match_time": game.get('startTime', "توقيت غير محدد"),
+                "home_team_logo": home_logo,
+                "away_team_logo": away_logo,
+                "status": "مجدولة",
+                "channels": [{"name": final_channel, "commentator": "غير محدد"}]
+            })
         
         return clean_matches
 
@@ -73,7 +62,7 @@ def fetch_direct_matches():
 
 def update_firebase(matches_list):
     if not matches_list:
-        print("لا توجد مباريات مطابقة للبطولات المطلوبة اليوم.")
+        print("لا توجد مباريات اليوم في المصدر.")
         return
 
     firebase_cert_string = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
@@ -91,7 +80,7 @@ def update_firebase(matches_list):
         db = firestore.client()
         doc_ref = db.collection("koora").document("daily_matches")
         doc_ref.set({"matches": matches_list, "last_updated": datetime.now().isoformat()})
-        print(f"✅ تم تحديث {len(matches_list)} مباراة بنجاح في الفايربيس!")
+        print(f"✅ تم تحديث {len(matches_list)} مباراة بنجاح (مع قنوات حقيقية وشعارات PNG)!")
         
     except Exception as e:
         print(f"خطأ في الفايربيس: {e}")

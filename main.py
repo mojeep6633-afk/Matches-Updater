@@ -8,7 +8,7 @@ from firebase_admin import credentials, firestore
 
 
 def get_matches():
-    print("جاري سحب المباريات الرسمية فقط بدون الودية...")
+    print("جاري سحب المباريات الرسمية فقط مباشرة وبدون مفاتيح...")
     clean_matches = []
     
     try:
@@ -24,7 +24,7 @@ def get_matches():
                 try:
                     league = m.find('div', {'class': 'title'}).text.strip()
                     
-                    # شرط استبعاد المباريات الودية تماماً
+                    # استبعاد المباريات الودية تلقائياً
                     if "ودية" in league or "friendly" in league.lower():
                         continue
                         
@@ -79,7 +79,7 @@ def update_firebase(matches_list):
         {"matches": matches_list, "last_updated": datetime.now().isoformat()}
     )
 
-    print(f"🔥 تم تحديث قاعدة بيانات فايربيس بنجاح بـ {len(matches_list)} مباراة رسمية فقط!")
+    print(f"🔥 تم تحديث قاعدة بيانات فايربيس بنجاح بـ {len(matches_list)} مباراة رسمية!")
 
 
 if __name__ == "__main__":

@@ -7,15 +7,15 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 def get_matches():
-    print("جاري سحب المباريات للبطولات المحددة...")
+    print("جاري سحب المباريات للبطولات المطلوبة...")
     clean_matches = []
     
-    # القوائم أو الكلمات المفتاحية للبطولات المطلوبة باللغتين لتجنب أي نقص
-    allowed_leagues = [
-        "الدوري السعودي", "السعودي للمحترفين", "كأس الملك", "خادم الحرمين",
-        "دوري أبطال آسيا", "أبطال آسيا", "دوري أبطال أوروبا", "الدوري الأوروبي",
-        "الدوري الإنجليزي", "الدوري الإسباني", "الليغا", "الدوري الإيطالي",
-        "الدوري الفرنسي", "الدوري البرازيلي", "الخليج"
+    # القوائم المطلوبة حرفياً
+    target_leagues = [
+        "دوري روشن السعودي", "الدوري السعودي للمحترفين", "كأس خادم الحرمين الشريفين", 
+        "كأس الملك", "دوري أبطال آسيا", "دوري أبطال أوروبا", "الدوري الأوروبي", 
+        "الدوري الإنجليزي", "الدوري الإسباني", "الدوري الإيطالي", "الدوري الفرنسي", 
+        "الدوري البرازيلي", "الدوري الإسباني - ليغا", "الليغا"
     ]
     
     try:
@@ -25,58 +25,56 @@ def get_matches():
         
         if response.status_code == 200:
             soup = BeautifulSoup(response.text, 'html.parser')
-            tournaments = soup.find_all('div', {'class': 'tournaments-container'})
+            match_cards = soup.find_all('div', {'class': 'matchCard'})
             
-            if not tournaments:
-                tournaments = soup.find_all('div', {'class': 'matchCard'})
-
-            for t in soup.find_all('div', {'class': 'matchCard'}):
+            for card in match_cards:
                 try:
-                    league_elem = t.find_previous('div', {'class': 'title'}) or t.find('div', {'class': 'title'})
-                    league = league_elem.text.strip() if league_elem else "مباراة عامة"
+                    # استخراج اسم البطولة
+                    league_elem = card.find_previous('div', {'class': 'title'})
+                    league_name = league_elem.text.strip() if league_elem else ""
                     
-                    # التحقق مما إذا كانت البطولة من ضمن القائمة المطلوبة
-                    is_target = any(alt in league for alt in allowed_leagues)
-                    if not is_target:
+                    # فلترة البطولات لتطابق طلبك حصرياً
+                    if not any(t in league_name for t in target_leagues):
                         continue
                         
-                    home_elem = t.find('div', {'class': 'teamA'})
-                    away_elem = t.find('div', {'class': 'teamB'})
-                    time_elem = t.find('div', {'class': 'time'})
+                    # استخراج أسماء الفريقين
+                    home_elem = card.find('div', {'class': 'teamA'})
+                    away_elem = card.find('div', {'class': 'teamB'})
+                    home_team = home_elem.text.strip() if home_elem else "الفريق المضيف"
+                    away_team = away_elem.text.strip() if away_elem else "الفريق الضيف"
                     
-                    home = home_elem.text.strip() if home_elem else "المضيف"
-                    away = away_elem.text.strip() if away_elem else "الضيف"
-                    match_time = time_elem.text.strip() if time_elem else "الوقت غير متوفر"
+                    # التوقيت
+                    time_elem = card.find('div', {'class': 'time'})
+                    match_time = time_elem.text.strip() if time_elem else "غير محدد"
                     
-                    # استخراج الشعارات إن وجدت
-                    home_logo = ""
-                    away_logo = ""
-                    img_tags = t.find_all('img')
-                    if len(img_tags) >= 2:
-                        home_logo = img_tags[0].get('data-src') or img_tags[0].get('src', '')
-                        away_logo = img_tags[1].get('data-src') or img_tags[1].get('src', '')
-
+                    # الشعارات
+                    home_logo, away_logo = "", ""
+                    imgs = card.find_all('img')
+                    if len(imgs) >= 2:
+                        home_logo = imgs[0].get('data-src') or imgs[0].get('src', '')
+                        away_logo = imgs[1].get('data-src') or imgs[1].get('src', '')
+                        
                     clean_matches.append({
-                        "league_name": league,
-                        "home_team": home,
-                        "away_team": away,
+                        "league_name": league_name,
+                        "home_team": home_team,
+                        "away_team": away_team,
                         "match_time": match_time,
                         "home_team_logo": home_logo,
                         "away_team_logo": away_logo,
                         "status": "مجدولة",
-                        "channels": [{"name": "قنوات النقل الرسمية", "commentator": "غير محدد"}]
+                        "channels": [{"name": "القنوات الناقلة الرسمية", "commentator": "غير محدد"}]
                     })
                 except Exception:
                     continue
                     
         return clean_matches
     except Exception as e:
-        print(f"حدث خطأ أثناء جلب البيانات: {e}")
+        print(f"خطأ أثناء سحب البيانات: {e}")
         return []
 
 def update_firebase(matches_list):
     if not matches_list:
-        print("مصفوفة المباريات فارغة، لم يتم العثور على مباريات مطابقة للبطولات المطلوبة اليوم.")
+        print("مصفوفة المباريات فارغة، لا توجد مباريات مطابقة للبطولات المطلوبة اليوم.")
         return
 
     firebase_cert_string = os.environ.get("FIREBASE_SERVICE_ACCOUNT")

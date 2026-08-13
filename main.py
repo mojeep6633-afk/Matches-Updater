@@ -9,7 +9,6 @@ def get_365scores_matches():
     APIFY_TOKEN = "apify_api_yJ5YPMy0T1ecpOB21nFMhUzffI7HYL2P41nU"
     client = ApifyClient(APIFY_TOKEN)
 
-    # استخدام معرف الأداة الصحيح والمطابق لصورتك تماماً
     actor_id = "crawlerbros/365scores-scraper"
 
     run_input = {
@@ -18,11 +17,17 @@ def get_365scores_matches():
         "maxItems": 150
     }
 
-    print("جاري تشغيل الأداة الصحيحة وجلب بيانات 365Scores...")
+    print("جاري تشغيل الأداة وجلب عينة البيانات...")
 
     try:
         run = client.actor(actor_id).call(run_input=run_input)
         dataset_items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
+        
+        if dataset_items:
+            # طباعة أول مباراة بالكامل لنعرف أسماء حقول الشعارات والقنوات بدقة في السجلات
+            print("--- عينة من هيكل بيانات المباراة الأولى ---")
+            print(json.dumps(dataset_items[0], indent=2, ensure_ascii=False))
+            print("------------------------------------------")
         
         target_leagues = [
             "Saudi", "Saudi Professional", "King", "Cup", 
@@ -39,22 +44,33 @@ def get_365scores_matches():
                 if "Friendly" in league or "ودية" in league:
                     continue
                 
-                # استخراج اسم القناة الناقلة من هذه الأداة
-                tv_channel = match.get("tvChannel") or match.get("channel") or match.get("broadcasts") or match.get("channels") or "قنوات النقل الرسمية"
+                # البحث الشامل عن أسماء القنوات
+                tv_channel = match.get("tvChannel") or match.get("channel") or match.get("broadcasts") or match.get("channels") or match.get("tv") or "قنوات النقل الرسمية"
                 if isinstance(tv_channel, list) and len(tv_channel) > 0:
-                    tv_channel = tv_channel[0].get("name", "قنوات النقل الرسمية")
+                    if isinstance(tv_channel[0], dict):
+                        tv_channel = tv_channel[0].get("name", "قنوات النقل الرسمية")
+                    else:
+                        tv_channel = str(tv_channel[0])
                 elif isinstance(tv_channel, dict):
                     tv_channel = tv_channel.get("name", "قنوات النقل الرسمية")
 
-                # استخراج روابط الشعارات الفعلية للفريقين من هياكل هذه الأداة
-                home_logo = match.get("homeTeamImageUrl") or match.get("homeLogo") or match.get("homeTeamLogo") or match.get("homeTeamImage") or match.get("homeBadge") or ""
-                away_logo = match.get("awayTeamImageUrl") or match.get("awayLogo") or match.get("awayTeamLogo") or match.get("awayTeamImage") or match.get("awayBadge") or ""
+                # البحث الشامل عن روابط الشعارات بكل الاحتمالات الممكنة
+                home_logo = (
+                    match.get("homeTeamImageUrl") or match.get("homeLogo") or 
+                    match.get("homeTeamLogo") or match.get("homeTeamImage") or 
+                    match.get("homeBadge") or match.get("homeImageUrl") or ""
+                )
+                away_logo = (
+                    match.get("awayTeamImageUrl") or match.get("awayLogo") or 
+                    match.get("awayTeamLogo") or match.get("awayTeamImage") or 
+                    match.get("awayBadge") or match.get("awayImageUrl") or ""
+                )
                 
                 clean_matches.append({
                     "league_name": league,
-                    "home_team": match.get("homeTeam", "") or match.get("homeTeamName", ""),
-                    "away_team": match.get("awayTeam", "") or match.get("awayTeamName", ""),
-                    "match_time": match.get("gameTime", "") or match.get("time", "توقيت غير محدد"),
+                    "home_team": match.get("homeTeam", "") or match.get("homeTeamName", "") or match.get("homeName", ""),
+                    "away_team": match.get("awayTeam", "") or match.get("awayTeamName", "") or match.get("awayName", ""),
+                    "match_time": match.get("gameTime", "") or match.get("time", "") or match.get("date", "توقيت غير محدد"),
                     "home_team_logo": home_logo,
                     "away_team_logo": away_logo,
                     "status": match.get("statusText", "مجدولة"),
@@ -87,7 +103,7 @@ def update_firebase(matches_list):
         db = firestore.client()
         doc_ref = db.collection("koora").document("daily_matches")
         doc_ref.set({"matches": matches_list, "last_updated": datetime.now().isoformat()})
-        print(f"🔥 تم تحديث {len(matches_list)} مباراة بالشعارات والقنوات الصحيحة في الفايربيس!")
+        print(f"🔥 تم تحديث {len(matches_list)} مباراة بنجاح في الفايربيس!")
         
     except Exception as e:
         print(f"خطأ في الفايربيس: {e}")

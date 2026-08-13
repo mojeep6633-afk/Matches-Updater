@@ -9,7 +9,8 @@ def get_365scores_matches():
     APIFY_TOKEN = "apify_api_yJ5YPMy0T1ecpOB21nFMhUzffI7HYL2P41nU"
     client = ApifyClient(APIFY_TOKEN)
 
-    actor_id = "crawlergang/365scores-scraper"
+    # استخدام معرف الأداة الصحيح والمطابق لصورتك تماماً
+    actor_id = "crawlerbros/365scores-scraper"
 
     run_input = {
         "mode": "liveScores",
@@ -17,7 +18,7 @@ def get_365scores_matches():
         "maxItems": 150
     }
 
-    print("جاري تشغيل كاشف 365Scores وجلب البيانات المحدثة...")
+    print("جاري تشغيل الأداة الصحيحة وجلب بيانات 365Scores...")
 
     try:
         run = client.actor(actor_id).call(run_input=run_input)
@@ -38,16 +39,16 @@ def get_365scores_matches():
                 if "Friendly" in league or "ودية" in league:
                     continue
                 
-                # استخراج اسم القناة الناقلة الحقيقية إن وجدت في البيانات
-                tv_channel = match.get("tvChannel") or match.get("channel") or match.get("broadcasts") or match.get("tv") or "غير متوفر"
+                # استخراج اسم القناة الناقلة من هذه الأداة
+                tv_channel = match.get("tvChannel") or match.get("channel") or match.get("broadcasts") or match.get("channels") or "قنوات النقل الرسمية"
                 if isinstance(tv_channel, list) and len(tv_channel) > 0:
                     tv_channel = tv_channel[0].get("name", "قنوات النقل الرسمية")
-                elif not tv_channel or tv_channel == "غير متوفر":
-                    tv_channel = "beIN Sports / SSC"
+                elif isinstance(tv_channel, dict):
+                    tv_channel = tv_channel.get("name", "قنوات النقل الرسمية")
 
-                # استخراج روابط الشعارات بدقة لضمان ظهورها
-                home_logo = match.get("homeTeamImageUrl") or match.get("homeLogo") or match.get("homeTeamLogo") or match.get("homeTeamImage") or ""
-                away_logo = match.get("awayTeamImageUrl") or match.get("awayLogo") or match.get("awayTeamLogo") or match.get("awayTeamImage") or ""
+                # استخراج روابط الشعارات الفعلية للفريقين من هياكل هذه الأداة
+                home_logo = match.get("homeTeamImageUrl") or match.get("homeLogo") or match.get("homeTeamLogo") or match.get("homeTeamImage") or match.get("homeBadge") or ""
+                away_logo = match.get("awayTeamImageUrl") or match.get("awayLogo") or match.get("awayTeamLogo") or match.get("awayTeamImage") or match.get("awayBadge") or ""
                 
                 clean_matches.append({
                     "league_name": league,
@@ -86,7 +87,7 @@ def update_firebase(matches_list):
         db = firestore.client()
         doc_ref = db.collection("koora").document("daily_matches")
         doc_ref.set({"matches": matches_list, "last_updated": datetime.now().isoformat()})
-        print(f"🔥 تم تحديث {len(matches_list)} مباراة مع الشعارات والقنوات بنجاح في الفايربيس!")
+        print(f"🔥 تم تحديث {len(matches_list)} مباراة بالشعارات والقنوات الصحيحة في الفايربيس!")
         
     except Exception as e:
         print(f"خطأ في الفايربيس: {e}")

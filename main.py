@@ -11,18 +11,19 @@ def get_365scores_matches():
 
     actor_id = "crawlergang/365scores-scraper"
 
-    # تصحيح القيم لتتوافق مع القيم المسموحة في الأداة حصرياً
     run_input = {
         "mode": "liveScores",
         "sport": "football",
         "maxItems": 150
     }
 
-    print("جاري تشغيل كاشف 365Scores عبر الأداة الخاصة بك...")
+    print("جاري تشغيل كاشف 365Scores وجلب البيانات...")
 
     try:
         run = client.actor(actor_id).call(run_input=run_input)
-        dataset_items = client.dataset(run["defaultDatasetId"]).list().items
+        
+        # التصحيح هنا: استخدام iterate_items بدلاً من list()
+        dataset_items = list(client.dataset(run["defaultDatasetId"]).iterate_items())
         
         target_leagues = [
             "Saudi", "Saudi Professional", "King", "Cup", 
@@ -76,7 +77,7 @@ def update_firebase(matches_list):
         db = firestore.client()
         doc_ref = db.collection("koora").document("daily_matches")
         doc_ref.set({"matches": matches_list, "last_updated": datetime.now().isoformat()})
-        print(f"✅ تم تحديث {len(matches_list)} مباراة بنجاح في الفايربيس!")
+        print(f"🔥 تم تحديث {len(matches_list)} مباراة بنجاح في الفايربيس!")
         
     except Exception as e:
         print(f"خطأ في الفايربيس: {e}")

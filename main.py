@@ -1,87 +1,74 @@
 import json
 import os
 from datetime import datetime
-import requests
-from bs4 import BeautifulSoup
+from apify_client import ApifyClient
 import firebase_admin
 from firebase_admin import credentials, firestore
 
+def get_365scores_matches():
+    # المفتاح المباشر الخاص بك
+    APIFY_TOKEN = "apify_api_yJ5YPMy0T1ecpOB21nFMhUzffI7HYL2P41nU"
+    client = ApifyClient(APIFY_TOKEN)
 
-def get_matches():
-    print("جاري سحب المباريات الرسمية فقط مباشرة وبدون مفاتيح...")
-    clean_matches = []
-    
+    run_input = {
+        "sport": "football",
+        "category": "matches",
+        "date": "today",
+        "maxItems": 100,
+        "proxyConfiguration": {
+            "useApifyProxy": True,
+            "apifyProxyGroups": ["RESIDENTIAL"],
+            "apifyProxyCountry": "SA",
+        }
+    }
+
+    print("جاري تشغيل كاشف 365Scores عبر Apify بالبروكسي العربي لجلب المباريات...")
+
     try:
-        url = "https://www.yallakora.com/match-center/%D9%85%D8%A8%D8%A7%D8%B1%D8%A7%D8%A9-%D8%A7%D9%84%D9%8A%D9%88%D9%85?date="
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        response = requests.get(url, headers=headers)
+        run = client.actor("apify/365scores-sports-data-scraper").call(run_input=run_input)
+        dataset_items = client.dataset(run["defaultDatasetId"]).list().items
         
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            matches_box = soup.find_all('div', {'class': 'matchCard'})
+        clean_matches = []
+        for match in dataset_items:
+            # فلترة المباريات الودية (استبعاد إذا وجد تصنيف Friendly)
+            league = match.get("competition", {}).get("name", "")
+            if "Friendly" in league or "ودية" in league:
+                continue
+                
+            clean_matches.append(match)
             
-            for m in matches_box:
-                try:
-                    league = m.find('div', {'class': 'title'}).text.strip()
-                    
-                    # استبعاد المباريات الودية تلقائياً
-                    if "ودية" in league or "friendly" in league.lower():
-                        continue
-                        
-                    home = m.find('div', {'class': 'teamA'}).text.strip()
-                    away = m.find('div', {'class': 'teamB'}).text.strip()
-                    time = m.find('div', {'class': 'time'}).text.strip()
-                    
-                    clean_matches.append({
-                        "league_name": league,
-                        "home_team": home,
-                        "away_team": away,
-                        "match_time": time,
-                        "status": "جاري التحديث",
-                        "home_team_logo": "",
-                        "away_team_logo": "",
-                        "channels": [{"name": "قنوات SSC / beIN", "commentator": "غير محدد"}]
-                    })
-                except:
-                    continue
-                    
-        return clean_matches if clean_matches else []
+        return clean_matches
 
     except Exception as e:
-        print(f"حدث خطأ أثناء سحب المباريات: {e}")
-        return []
-
+        print(f"حدث خطأ أثناء سحب البيانات من Apify: {e}")
+        return None
 
 def update_firebase(matches_list):
     if not matches_list:
-        print("مصفوفة المباريات فارغة، لن يتم تحديث فايربيس.")
+        print("مصفوفة المباريات فارغة.")
         return
 
     firebase_cert_string = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
-
-    if not firebase_cert_string:
-        print("خطأ: لم يتم العثور على مفتاح فايربيس السري")
-        return
-
+    
+    # محاولة تحميل شهادة الفايربيس
     try:
-        firebase_cert = json.loads(firebase_cert_string)
-        cred = credentials.Certificate(firebase_cert)
-    except Exception:
-        cred = credentials.Certificate("serviceAccountKey.json")
-
-    if not firebase_admin._apps:
-        firebase_admin.initialize_app(cred)
-
-    db = firestore.client()
-
-    doc_ref = db.collection("koora").document("daily_matches")
-    doc_ref.set(
-        {"matches": matches_list, "last_updated": datetime.now().isoformat()}
-    )
-
-    print(f"🔥 تم تحديث قاعدة بيانات فايربيس بنجاح بـ {len(matches_list)} مباراة رسمية!")
-
+        if firebase_cert_string:
+            firebase_cert = json.loads(firebase_cert_string)
+            cred = credentials.Certificate(firebase_cert)
+        else:
+            cred = credentials.Certificate("serviceAccountKey.json")
+            
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app(cred)
+            
+        db = firestore.client()
+        doc_ref = db.collection("koora").document("daily_matches")
+        doc_ref.set({"matches": matches_list, "last_updated": datetime.now().isoformat()})
+        print(f"✅ تم تحديث {len(matches_list)} مباراة بنجاح!")
+        
+    except Exception as e:
+        print(f"خطأ في الفايربيس: {e}")
 
 if __name__ == "__main__":
-    todays_matches = get_matches()
-    update_firebase(todays_matches)
+    data = get_365scores_matches()
+    update_firebase(data)

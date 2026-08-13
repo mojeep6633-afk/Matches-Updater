@@ -6,18 +6,12 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 def get_api_football_matches():
-    # تم دمج المفتاح الخاص بك هنا
     API_KEY = "12d594efcd4cf9df22a2dba5067a8254"
-    
     date_today = datetime.now().strftime("%Y-%m-%d")
     
-    # رابط جلب مباريات اليوم
     fixtures_url = "https://v3.football.api-sports.io/fixtures"
     querystring = {"date": date_today, "timezone": "Asia/Riyadh"}
-    
-    headers = {
-        "x-apisports-key": API_KEY
-    }
+    headers = {"x-apisports-key": API_KEY}
 
     print(f"جاري سحب مباريات اليوم ({date_today}) من API-Football...")
 
@@ -30,24 +24,22 @@ def get_api_football_matches():
         data = response.json()
         fixtures = data.get("response", [])
         
-        # الكلمات الدلالية للبطولات المستهدفة
+        # الكلمات الدلالية المبسطة لضمان التقاط جميع البطولات
         target_keywords = [
-            "Saudi Pro League", "King Cup", "Gulf", "AFC", 
-            "UEFA Champions League", "UEFA Europa League", 
-            "Premier League", "La Liga", "Primera Division", 
-            "Serie A", "Ligue 1", "Brasileiro"
+            "saudi", "king cup", "gulf", "afc", 
+            "champions league", "europa league", 
+            "premier league", "la liga", "primera", 
+            "serie a", "ligue 1", "brasileiro"
         ]
         
         clean_matches = []
         
         for item in fixtures:
             league = item.get("league", {})
-            league_name = league.get("name", "")
-            league_country = league.get("country", "")
+            # دمج اسم الدولة واسم البطولة لضمان البحث الصحيح
+            league_name = f"{league.get('country', '')} {league.get('name', '')}".strip()
             
-            full_league_name = f"{league_country} {league_name}"
-            
-            if any(keyword.lower() in full_league_name.lower() for keyword in target_keywords):
+            if any(keyword.lower() in league_name.lower() for keyword in target_keywords):
                 
                 fixture = item.get("fixture", {})
                 fixture_id = fixture.get("id")
@@ -75,7 +67,7 @@ def get_api_football_matches():
                         pass
                 
                 clean_matches.append({
-                    "league_name": league_name,
+                    "league_name": league.get("name", "غير معروف"), 
                     "home_team": teams.get("home", {}).get("name", "غير معروف"),
                     "away_team": teams.get("away", {}).get("name", "غير معروف"),
                     "match_time": match_time,

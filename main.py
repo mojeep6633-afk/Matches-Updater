@@ -7,26 +7,24 @@ from firebase_admin import credentials, firestore
 
 
 def get_365scores_matches():
-    # 1. ضع مفتاح الأمان (API Token) الخاص بحسابك في Apify هنا
+    # 1. جلب مفتاح الأمان من المتغيرات
     APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "ضع_مفتاح_الأمان_الخاص_بك_هنا")
     client = ApifyClient(APIFY_TOKEN)
 
-    # 2. إعداد المدخلات مع تفعيل البروكسي السكني السعودي لجلب القنوات والمعلقين العرب
+    # 2. إعداد المدخلات (تم رفع maxItems إلى 300 لضمان جلب كافة المباريات المهمة والودية)
     run_input = {
         "sport": "football",
         "category": "matches",
         "date": "today",
-        "maxItems": 50,
+        "maxItems": 300, 
         "proxyConfiguration": {
             "useApifyProxy": True,
             "apifyProxyGroups": ["RESIDENTIAL"],
-            "apifyProxyCountry": "SA",  # تضمن سحب قنوات SSC و beIN والمعلقين العرب
+            "apifyProxyCountry": "SA",
         },
     }
 
-    print(
-        "جاري تشغيل كاشف 365Scores عبر Apify بالبروكسي العربي لجلب المباريات..."
-    )
+    print("جاري تشغيل كاشف 365Scores عبر Apify بالبروكسي العربي لجلب المباريات...")
 
     try:
         # 3. تشغيل أداة الكشط في Apify واستقبال البيانات
@@ -37,26 +35,19 @@ def get_365scores_matches():
 
         clean_matches = []
 
-        # 4. معالجة وتجهيز البيانات المستخرجة متوافقة مع تطبيقك
+        # 4. معالجة وتجهيز البيانات
         for match in dataset_items:
-            # اسم الدوري/المنافسة
-            league_name = match.get("competition", {}).get(
-                "name", "بطولة غير محددة"
-            )
+            league_name = match.get("competition", {}).get("name", "بطولة غير محددة")
 
-            # بيانات الفريق المضيف والشعار
             home_team = match.get("homeTeam", {}).get("name", "الفريق المضيف")
             home_logo = match.get("homeTeam", {}).get("logoUrl", "")
 
-            # بيانات الفريق الضيف والشعار
             away_team = match.get("awayTeam", {}).get("name", "الفريق الضيف")
             away_logo = match.get("awayTeam", {}).get("logoUrl", "")
 
-            # توقيت المباراة وحالتها من 365Scores
-            match_time = match.get("startTime", "")  # صيغة ISO القياسية وعادة ما تكون بتوقيت مكة
+            match_time = match.get("startTime", "")
             status = match.get("statusText", "لم تبدأ")
 
-            # جلب القنوات والمعلقين المكتشفين بواسطة البروكسي
             broadcasters = match.get("broadcasters", [])
             channels_list = []
 
@@ -65,17 +56,12 @@ def get_365scores_matches():
                     channels_list.append(
                         {
                             "name": b.get("name", "غير متوفر"),
-                            "commentator": match.get(
-                                "commentator", "غير محدد"
-                            ),
+                            "commentator": match.get("commentator", "غير محدد"),
                         }
                     )
             else:
-                channels_list.append(
-                    {"name": "غير معلن", "commentator": "غير محدد"}
-                )
+                channels_list.append({"name": "غير معلن", "commentator": "غير محدد"})
 
-            # بناء الكائن النهائي لكل مباراة
             clean_matches.append(
                 {
                     "league_name": league_name,
@@ -101,40 +87,31 @@ def update_firebase(matches_list):
         print("مصفوفة المباريات فارغة، لن يتم تحديث فايربيس.")
         return
 
-    # جلب اعتماد الحساب السري لـ Firebase من متغيرات البيئة (أو ضع المسار المباشر لملف الـ json)
     firebase_cert_string = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
 
     if not firebase_cert_string:
-        print(
-            "خطأ: لم يتم العثور على مفتاح فايربيس السري في المتغيرات (FIREBASE_SERVICE_ACCOUNT)"
-        )
+        print("خطأ: لم يتم العثور على مفتاح فايربيس السري في المتغيرات (FIREBASE_SERVICE_ACCOUNT)")
         return
 
     try:
         firebase_cert = json.loads(firebase_cert_string)
         cred = credentials.Certificate(firebase_cert)
     except Exception:
-        # في حال كنت تختبر محلياً وتضع مسار الملف المباشر "serviceAccountKey.json" بدلاً من النص
         cred = credentials.Certificate("serviceAccountKey.json")
 
-    # تهيئة اتصال فايربيس إذا لم يكن متصلاً مسبقاً
     if not firebase_admin._apps:
         firebase_admin.initialize_app(cred)
 
     db = firestore.client()
 
-    # رفع البيانات كاملة داخل مستند daily_matches في كوليكشن koora
     doc_ref = db.collection("koora").document("daily_matches")
     doc_ref.set(
         {"matches": matches_list, "last_updated": datetime.now().isoformat()}
     )
 
-    print(
-        f"🔥 تم تحديث قاعدة بيانات فايربيس بنجاح بـ {len(matches_list)} مباراة من 365Scores!"
-    )
+    print(f"🔥 تم تحديث قاعدة بيانات فايربيس بنجاح بـ {len(matches_list)} مباراة!")
 
 
 if __name__ == "__main__":
-    # تشغيل السكربت بالكامل
     todays_matches = get_365scores_matches()
     update_firebase(todays_matches)

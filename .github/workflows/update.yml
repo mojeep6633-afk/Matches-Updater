@@ -1,11 +1,29 @@
+name: Update Matches
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 * * * *'
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install firebase-admin apify-client pytz requests
-          # أو إذا كنت تستخدم ملف متطلبات: pip install -r requirements.txt
+          pip install requests beautifulsoup4 firebase-admin pytz apify-client
           
       - name: Run python main.py
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }} # تأكد من إضافة هذا المتغير في السيكريتس أيضاً
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
         run: python main.py

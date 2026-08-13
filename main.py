@@ -7,16 +7,15 @@ from firebase_admin import credentials, firestore
 
 
 def get_365scores_matches():
-    # 1. جلب مفتاح الأمان من المتغيرات
-    APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "ضع_مفتاح_الأمان_الخاص_بك_هنا")
+    # وضع مفتاح Apify مباشرة هنا لضمان عمله بدون أخطاء
+    APIFY_TOKEN = "apify_api_yJ5YPMy0T1ecpOB21nFMhUzffI7HYL2P41nU"
     client = ApifyClient(APIFY_TOKEN)
 
-    # 2. إعداد المدخلات (تم رفع maxItems إلى 300 لضمان جلب كافة المباريات المهمة والودية)
     run_input = {
         "sport": "football",
         "category": "matches",
         "date": "today",
-        "maxItems": 300, 
+        "maxItems": 300,
         "proxyConfiguration": {
             "useApifyProxy": True,
             "apifyProxyGroups": ["RESIDENTIAL"],
@@ -27,7 +26,6 @@ def get_365scores_matches():
     print("جاري تشغيل كاشف 365Scores عبر Apify بالبروكسي العربي لجلب المباريات...")
 
     try:
-        # 3. تشغيل أداة الكشط في Apify واستقبال البيانات
         run = client.actor("apify/365scores-sports-data-scraper").call(
             run_input=run_input
         )
@@ -35,16 +33,12 @@ def get_365scores_matches():
 
         clean_matches = []
 
-        # 4. معالجة وتجهيز البيانات
         for match in dataset_items:
             league_name = match.get("competition", {}).get("name", "بطولة غير محددة")
-
             home_team = match.get("homeTeam", {}).get("name", "الفريق المضيف")
             home_logo = match.get("homeTeam", {}).get("logoUrl", "")
-
             away_team = match.get("awayTeam", {}).get("name", "الفريق الضيف")
             away_logo = match.get("awayTeam", {}).get("logoUrl", "")
-
             match_time = match.get("startTime", "")
             status = match.get("statusText", "لم تبدأ")
 
@@ -90,7 +84,7 @@ def update_firebase(matches_list):
     firebase_cert_string = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
 
     if not firebase_cert_string:
-        print("خطأ: لم يتم العثور على مفتاح فايربيس السري في المتغيرات (FIREBASE_SERVICE_ACCOUNT)")
+        print("خطأ: لم يتم العثور على مفتاح فايربيس السري في المتغيرات")
         return
 
     try:

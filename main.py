@@ -1,51 +1,43 @@
 import requests
 
-# الرابط الرئيسي لواجهة برمجة تطبيقات كرة القدم
 url = "https://api-sports.io"
-
-# أدخل مفتاح الـ API الخاص بك هنا (تلقاه في لوحة تحكم حسابك)
 API_KEY = "ضع_مفتاح_الـ_API_الخاص_بك_هنا"
 
-# تحديد المعاملات: الدوري السعودي، الموسم الحالي، واللغة العربية
-# ملاحظة: يمكنك تغيير السنة (season) حسب الموسم المطلوب
 headers = {
     'x-apisports-key': API_KEY
 }
 
+# المعاملات المطلوبة لجلب جدول مباريات الموسم كاملاً
 params = {
     'league': '307',       # معرف الدوري السعودي للمحترفين
-    'season': '2025',      # حدد سنة الموسم الحالي المتاح بالمنصة
-    'lang': 'ar'           # جلب الأسماء باللغة العربية
+    'season': '2026',      # تحديد موسم 2026-2027 الحالي
+    'lang': 'ar'           # عرض أسماء الأندية والملاعب بالعربية
 }
 
 try:
     response = requests.get(url, headers=headers, params=params)
     data = response.json()
 
-    # التحقق من نجاح الطلب ووجود بيانات
     if response.status_code == 200 and data.get("response"):
-        # استخراج قائمة الترتيب
-        standings = data["response"][0]["league"]["standings"][0]
+        fixtures_list = data["response"]
         
-        print(f"=== ترتيب الدوري السعودي للمحترفين ===")
-        print(f"{'المركز':<6} | {'الفريق':<20} | {'النقاط':<6} | {'لعب':<5} | {'فوز':<5} | {'تعادل':<5} | {'خسارة':<5}")
-        print("-" * 70)
+        print(f"=== جدول مباريات الدوري السعودي للمحترفين ===")
+        print(f"{'التاريخ':<12} | {'الجولة':<10} | {'صاحب الأرض':<20} | {'الضيف':<20} | {'الملعب':<25}")
+        print("-" * 95)
         
-        for team in standings:
-            rank = team["rank"]
-            team_name = team["team"]["name"]  # سيظهر بالعربية بفضل معامل lang=ar
-            points = team["points"]
-            played = team["all"]["played"]
-            win = team["all"]["win"]
-            draw = team["all"]["draw"]
-            lose = team["all"]["lose"]
+        # استخراج أول 15 مباراة كمثال (يمكنك تصفح القائمة كاملة)
+        for match in fixtures_list[:15]:
+            # استخراج التاريخ فقط بدون الوقت اللحظي
+            date = match["fixture"]["date"].split("T")[0]
+            round_name = match["league"]["round"]
+            home_team = match["teams"]["home"]["name"]
+            away_team = match["teams"]["away"]["name"]
+            venue = match["fixture"]["venue"]["name"] or "غير محدد"
             
-            print(f"{rank:<6} | {team_name:<20} | {points:<6} | {played:<5} | {win:<5} | {draw:<5} | {lose:<5}")
+            print(f"{date:<12} | {round_name:<10} | {home_team:<20} | {away_team:<20} | {venue:<25}")
             
     else:
-        print("خطأ في جلب البيانات أو أن الموسم لم يبدأ بعد.")
-        if "errors" in data and data["errors"]:
-            print("تفاصيل الخطأ:", data["errors"])
+        print("فشل جلب البيانات. تأكد من صحة مفتاح الـ API الخاص بك.")
 
 except Exception as e:
-    print(f"حدث خطأ أثناء الاتصال بالـ API: {e}")
+    print(f"حدث خطأ أثناء الاتصال: {e}")

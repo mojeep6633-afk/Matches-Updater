@@ -1,7 +1,7 @@
 import requests
 
 url = "https://api-sports.io"
-API_KEY = "ضع_مفتاح_الـ_API_الخاص_بك_هنا"
+API_KEY = "12d594efcd4cf9df22a2dba5067a8254"
 
 headers = {
     'x-apisports-key': API_KEY

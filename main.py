@@ -11,10 +11,10 @@ def get_365scores_matches():
 
     actor_id = "crawlergang/365scores-scraper"
 
-    # تصحيح القيمة لتكون متوافقة مع المتطلبات التقنية للأداة
+    # تصحيح القيم لتتوافق مع القيم المسموحة في الأداة حصرياً
     run_input = {
         "mode": "liveScores",
-        "sport": "Football (Soccer)",
+        "sport": "football",
         "maxItems": 150
     }
 

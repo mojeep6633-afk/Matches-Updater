@@ -33,8 +33,15 @@ def capture_and_save_locally():
         
         page.wait_for_timeout(1000)
         
-        print("جاري التقاط الصورة فائقة الدقة...")
-        page.screenshot(path=image_filename, full_page=True)
+        print("جاري تحديد جدول المباريات وتصويره بدقة...")
+        try:
+            # محاولة التقاط صندوق المباريات فقط لتجنب الصور الزائدة في الأسفل
+            matches_box = page.locator('.matches-day-container').first
+            matches_box.screenshot(path=image_filename)
+        except Exception as e:
+            print(f"التحديد الدقيق لمשտ الحاوية لم ينجح، جارِ التقاط الصورة العامة: {e}")
+            page.screenshot(path=image_filename, full_page=True)
+            
         browser.close()
         
     print(f"تم التقاط الصورة بنجاح وحفظها باسم: {image_filename}")

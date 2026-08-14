@@ -33,13 +33,21 @@ def capture_and_save_locally():
         
         page.wait_for_timeout(1000)
         
-        print("جاري تحديد جدول المباريات وتصويره بدقة...")
+        # محاولة الضغط على زر السهم أو زر إظهار الجدول الكامل قبل التصوير
+        print("جاري الضغط على زر إظهار القائمة الكاملة...")
         try:
-            # محاولة التقاط صندوق المباريات فقط لتجنب الصور الزائدة في الأسفل
+            # البحث عن أي زر يحتوي على سهم للأسفل أو أيقونة التوسيع والضغط عليه
+            # يمكنك تعديل المحدد (Selector) بناءً على العنصر الفعلي في الموقع
+            page.locator('.ico-arrow-down, .more-matches, svg, .down-arrow').first.click(timeout=5000)
+            page.wait_for_timeout(2000) # انتظار فتح القائمة
+        except Exception as e:
+            print(f"ملاحظة: لم يتم العثور على الزر أو تم فتحه مسبقاً: {e}")
+
+        print("جاري التقاط صورة جدول المباريات الكامل...")
+        try:
             matches_box = page.locator('.matches-day-container').first
             matches_box.screenshot(path=image_filename)
-        except Exception as e:
-            print(f"التحديد الدقيق لمשտ الحاوية لم ينجح، جارِ التقاط الصورة العامة: {e}")
+        except Exception:
             page.screenshot(path=image_filename, full_page=True)
             
         browser.close()

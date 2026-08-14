@@ -47,9 +47,9 @@ headers = {
     "x-rapidapi-key": API_KEY
 }
 
-# قائمة بأرقام الدوريات المطلوبة وأسمائها المنقحة لتظهر بشكل جميل
-target_leagues = {
-    307: "دوري روشن السعودي",
+# قائمة الدوريات الكبرى التي طلبها المستخدم
+target_leagues_names = {
+    307: "الدوري السعودي للمحترفين",
     311: "كأس خادم الحرمين الشريفين",
     17:  "دوري أبطال آسيا للنخبة",
     3:   "الدوري الأوروبي",
@@ -59,11 +59,11 @@ target_leagues = {
     61:  "الدوري الفرنسي",
     71:  "الدوري البرازيلي",
     15:  "كأس الخليج العربي", 
-    16:  "دوري أبطال الخليج للأندية" # بديل مقارب لمجلس التعاون
+    16:  "دوري أبطال الخليج للأندية"
 }
 
 try:
-    print(f"جاري البحث عن مباريات ليوم: {today_date}")
+    print(f"جاري البحث عن جميع مباريات اليوم: {today_date}")
     response = requests.get(url_fixtures, headers=headers, params=querystring)
     data = response.json()
     
@@ -72,70 +72,64 @@ try:
 
     for match in matches_today:
         league_id = match["league"]["id"]
+        league_name_api = match["league"]["name"]
         
-        # فلترة المباريات بناءً على الدوريات المطلوبة فقط
-        if league_id in target_leagues:
-            home_team = match["teams"]["home"]["name"]
-            away_team = match["teams"]["away"]["name"]
-            home_logo = match["teams"]["home"]["logo"]
-            away_logo = match["teams"]["away"]["logo"]
-            
-            # تعديل اسم الدوري للاسم العربي المنسق
-            league_name = target_leagues.get(league_id)
-            
-            dt = datetime.fromisoformat(match["fixture"]["date"])
-            time_arabic = dt.strftime("%I:%M %p").replace("AM", "ص").replace("PM", "م")
-            
-            fixture_id = str(match["fixture"]["id"])
-            
-            # جلب القنوات الناقلة
+        # إعطاء الدوري الاسم العربي إذا كان في القائمة
+        league_name = target_leagues_names.get(league_id, league_name_api)
+
+        home_team = match["teams"]["home"]["name"]
+        away_team = match["teams"]["away"]["name"]
+        home_logo = match["teams"]["home"]["logo"]
+        away_logo = match["teams"]["away"]["logo"]
+        
+        dt = datetime.fromisoformat(match["fixture"]["date"])
+        time_arabic = dt.strftime("%I:%M %p").replace("AM", "ص").replace("PM", "م")
+        
+        fixture_id = str(match["fixture"]["id"])
+        
+        channel_name = "غير محدد"
+        
+        # جلب القنوات الناقلة فقط للدوريات المحددة
+        if league_id in target_leagues_names:
             url_tv = "https://v3.football.api-sports.io/fixtures/tv"
             tv_response = requests.get(url_tv, headers=headers, params={"fixture": fixture_id}).json()
             tv_data = tv_response.get("response", [])
             
-            channel_name = "غير محدد"
             if tv_data:
                 channels_list = [tv["tv"]["name"] for tv in tv_data]
                 raw_channel = " , ".join(channels_list)
                 
-                # إحلال "ثمانية الرياضية" مكان القنوات السعودية القديمة
+                # استبدال ذكي: تحويل SSC إلى ثمانية مع الحفاظ على الرقم
                 if league_id in [307, 311]:
-                    if "SSC" in raw_channel.upper() or not raw_channel:
-                        channel_name = "ثمانية الرياضية"
-                    else:
-                        channel_name = raw_channel
+                    channel_name = raw_channel.replace("SSC", "ثمانية").replace("ssc", "ثمانية").replace("Ssc", "ثمانية")
                 else:
                     channel_name = raw_channel
 
-            # تعيين قنوات افتراضية عربية في حال لم يُرجع الـ API اسم القناة
+            # قنوات افتراضية للدوريات الأوروبية فقط، وترك السعودي "غير محدد" إذا لم يتوفر
             if channel_name == "غير محدد":
-                if league_id in [307, 311]:
-                    channel_name = "ثمانية الرياضية"
-                elif league_id in [39, 140, 61, 17]:
+                if league_id in [39, 140, 61, 17]:
                     channel_name = "beIN Sports"
                 elif league_id == 135:
                     channel_name = "AD Sports"
-            
-            print(f"المباراة: {home_team} ضد {away_team} | الدوري: {league_name} | القناة: {channel_name}")
 
-            match_dict = {
-                "home_team": home_team,
-                "home_team_logo": home_logo,
-                "away_team": away_team,
-                "away_team_logo": away_logo,
-                "match_time": time_arabic,
-                "league_name": league_name,
-                "channels": [
-                    {
-                        "name": channel_name,
-                        "commentator": "غير محدد"
-                    }
-                ]
-            }
-            all_matches_list.append(match_dict)
+        match_dict = {
+            "home_team": home_team,
+            "home_team_logo": home_logo,
+            "away_team": away_team,
+            "away_team_logo": away_logo,
+            "match_time": time_arabic,
+            "league_name": league_name,
+            "channels": [
+                {
+                    "name": channel_name,
+                    "commentator": "غير محدد"
+                }
+            ]
+        }
+        all_matches_list.append(match_dict)
 
     if len(all_matches_list) == 0:
-        print("لم يتم العثور على مباريات لهذه الدوريات اليوم.")
+        print("لم يتم العثور على أي مباراة اليوم.")
     else:
         if 'db' in locals():
             final_data = {
@@ -143,7 +137,7 @@ try:
                 "matches": all_matches_list
             }
             db.collection('daily_matches').document('daily_matches').set(final_data)
-            print(f"تم رفع {len(all_matches_list)} مباريات لتطبيقك بنجاح! 🚀")
+            print(f"تم رفع {len(all_matches_list)} مباراة لتطبيقك بنجاح! 🚀")
 
 except Exception as e:
     print(f"حدث خطأ: {e}")

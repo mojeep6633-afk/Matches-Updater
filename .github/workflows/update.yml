@@ -3,7 +3,8 @@ name: Update Matches
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 * * * *'
+    # سيتم تشغيل السكربت كل 4 ساعات (6 مرات في اليوم) لتوفير الباقة
+    - cron: '0 */4 * * *'
 
 jobs:
   run-script:
@@ -25,5 +26,7 @@ jobs:
       - name: Run python main.py
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          API_KEY: ${{ secrets.API_KEY }}
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          PYTHONIOENCODING: 'utf-8'
         run: python main.py

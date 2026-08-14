@@ -1,63 +1,88 @@
 import os
 import json
+from playwright.sync_api import sync_playwright
 import firebase_admin
-from firebase_admin import credentials, firestore
-import sys
+from firebase_admin import credentials, storage, firestore
 
-sys.stdout.reconfigure(encoding='utf-8')
-
-# الاتصال بفايربيس
-try:
-    firebase_key_json = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
-    if firebase_key_json:
-        cred_dict = json.loads(firebase_key_json)
+# 1. إعداد الاتصال بفايربيس
+def initialize_firebase():
+    # استدعاء مفتاح فايربيس من إعدادات GitHub أو محلياً
+    firebase_key = os.environ.get("FIREBASE_SERVICE_ACCOUNT")
+    if firebase_key:
+        cred_dict = json.loads(firebase_key)
         cred = credentials.Certificate(cred_dict)
     else:
         cred = credentials.Certificate("firebase_key.json")
+    
+    # ضع هنا رابط الـ Storage الخاص بمشروعك (تأخذه من لوحة تحكم فايربيس)
+    # مثال: 'titanium-app-1234.appspot.com'
+    bucket_name = 'ضع_اسم_مساحة_التخزين_هنا.appspot.com'
+    
+    if not firebase_admin._apps:
+        firebase_admin.initialize_app(cred, {'storageBucket': bucket_name})
+    
+    return firestore.client(), storage.bucket()
+
+def capture_and_upload():
+    db, bucket = initialize_firebase()
+    image_filename = 'daily_matches.png'
+
+    print("بدء تشغيل المتصفح الوهمي...")
+    
+    with sync_playwright() as p:
+        # فتح متصفح مخفي
+        browser = p.chromium.launch(headless=True)
         
-    firebase_admin.initialize_app(cred)
-    db = firestore.client()
-except Exception as e:
-    print(f"خطأ في الاتصال: {e}")
-    sys.exit(1)
+        # 2. إعداد شاشة جوال وهمية بدقة عالية جداً (السر في عدم تكسر الصورة)
+        context = browser.new_context(
+            viewport={'width': 450, 'height': 800}, # عرض جوال لترتيب نظيف
+            device_scale_factor=3, # مضاعفة البكسلات 3 مرات لدقة 4K
+            user_agent='Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 KHTML Mobile Safari'
+        )
+        
+        page = context.new_page()
+        print("جاري الدخول إلى موقع في الجول...")
+        page.goto('https://www.filgoal.com/matches/', wait_until='networkidle')
+        
+        # 3. عملية التنظيف البرمجي الذكية (إخفاء المشتتات)
+        print("جاري تنظيف الصفحة من الإعلانات ومشغلات الفيديو...")
+        page.evaluate('''
+            () => {
+                // حذف كل الإعلانات (Banners & Ads)
+                document.querySelectorAll('iframe, .ad, .ads, [id^="div-gpt-ad"]').forEach(el => el.remove());
+                
+                // حذف مشغلات الفيديو تماماً من وسط الجدول
+                document.querySelectorAll('.video-player, video, .media-player, .stream-box').forEach(el => el.remove());
+                
+                // حذف الشريط العلوي (Header) والسفلي (Footer) لتبقى المباريات فقط
+                document.querySelectorAll('header, footer, .navbar, .app-download-banner').forEach(el => el.remove());
+            }
+        ''')
+        
+        # الانتظار ثانية واحدة للتأكد من اختفاء العناصر
+        page.wait_for_timeout(1000)
+        
+        # 4. التقاط صورة كاملة للجدول النظيف
+        print("جاري التقاط الصورة فائقة الدقة...")
+        page.screenshot(path=image_filename, full_page=True)
+        browser.close()
 
-# بيانات اليوم الثابتة لإنقاذ الموقف (بدون استخدام الـ API)
-final_data = {
-    "last_updated": "2026-08-15",
-    "matches": [
-        {
-            "home_team": "التعاون", "home_team_logo": "https://media.api-sports.io/football/teams/164.png", 
-            "away_team": "الخليج", "away_team_logo": "https://media.api-sports.io/football/teams/160.png",
-            "match_time": "07:15 م", "league_name": "الدوري السعودي للمحترفين",
-            "channels": [{"name": "ثمانية الرياضية", "commentator": "غير محدد"}]
-        },
-        {
-            "home_team": "الاتحاد", "home_team_logo": "https://media.api-sports.io/football/teams/157.png", 
-            "away_team": "الخلود", "away_team_logo": "https://media.api-sports.io/football/teams/162.png",
-            "match_time": "09:00 م", "league_name": "الدوري السعودي للمحترفين",
-            "channels": [{"name": "ثمانية الرياضية", "commentator": "غير محدد"}]
-        },
-        {
-            "home_team": "النصر", "home_team_logo": "https://media.api-sports.io/football/teams/153.png", 
-            "away_team": "الفتح", "away_team_logo": "https://media.api-sports.io/football/teams/154.png",
-            "match_time": "09:00 م", "league_name": "الدوري السعودي للمحترفين",
-            "channels": [{"name": "ثمانية الرياضية", "commentator": "غير محدد"}]
-        },
-        {
-            "home_team": "ألافيس", "home_team_logo": "https://media.api-sports.io/football/teams/529.png", 
-            "away_team": "خيتافي", "away_team_logo": "https://media.api-sports.io/football/teams/546.png",
-            "match_time": "08:30 م", "league_name": "الدوري الإسباني",
-            "channels": [{"name": "beIN Sports", "commentator": "غير محدد"}]
-        },
-        {
-            "home_team": "إشبيلية", "home_team_logo": "https://media.api-sports.io/football/teams/536.png", 
-            "away_team": "رايو فايكانو", "away_team_logo": "https://media.api-sports.io/football/teams/720.png",
-            "match_time": "10:30 م", "league_name": "الدوري الإسباني",
-            "channels": [{"name": "beIN Sports", "commentator": "غير محدد"}]
-        }
-    ]
-}
+    # 5. رفع الصورة إلى Firebase Storage
+    print("جاري رفع الصورة إلى فايربيس...")
+    blob = bucket.blob(image_filename)
+    # إضافة صلاحية لكي يتمكن التطبيق من قراءة الصورة
+    blob.upload_from_filename(image_filename, content_type='image/png')
+    blob.make_public()
+    image_url = blob.public_url
+    
+    # 6. تحديث رابط الصورة في قاعدة البيانات Firestore ليقرأها التطبيق
+    print("جاري تحديث قاعدة البيانات بالرابط الجديد...")
+    db.collection('daily_matches').document('schedule').set({
+        'image_url': image_url,
+        'last_updated': firestore.SERVER_TIMESTAMP
+    })
+    
+    print(f"تمت العملية بنجاح! الرابط الجديد للصورة: {image_url}")
 
-# الرفع لفايربيس
-db.collection('daily_matches').document('daily_matches').set(final_data)
-print("تم رفع مباريات اليوم يدوياً بنجاح! اذهب لتطبيقك وستجدها معروضة للمشاهدين.")
+if __name__ == '__main__':
+    capture_and_upload()

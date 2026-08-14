@@ -3,8 +3,8 @@ name: Update Matches
 on:
   workflow_dispatch:
   schedule:
-    # سيتم تشغيل السكربت كل 4 ساعات (6 مرات في اليوم) لتوفير الباقة
-    - cron: '0 */4 * * *'
+    # التشغيل مرتين يومياً
+    - cron: '0 9,14 * * *'
 
 jobs:
   run-script:
@@ -21,12 +21,13 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4 firebase-admin pytz apify-client
+          # إضافة مكتبة فايربيس ومكتبة بلاي رايت
+          pip install firebase-admin playwright
+          # هذا السطر مهم جداً لتثبيت المتصفح الوهمي الذي سيلتقط الصورة
+          python -m playwright install chromium
           
       - name: Run python main.py
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          API_KEY: ${{ secrets.API_KEY }}
-          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           PYTHONIOENCODING: 'utf-8'
         run: python main.py

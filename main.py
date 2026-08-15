@@ -9,7 +9,7 @@ def capture_and_save_locally():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         
-        # 1. قمنا بزيادة طول الشاشة الوهمية (2000) لضمان ظهور الزر بدون الحاجة للتمرير
+        # شاشة وهمية طويلة لضمان ظهور كل المباريات وزر التوسيع
         context = browser.new_context(
             viewport={'width': 450, 'height': 2000},
             device_scale_factor=3,
@@ -19,8 +19,9 @@ def capture_and_save_locally():
         page = context.new_page()
         print("جاري الدخول إلى موقع في الجول...")
         
-        # 2. ننتظر حتى يكتمل تحميل الصفحة بالكامل (networkidle)
-        page.goto('https://www.filgoal.com/matches/', timeout=60000, wait_until='networkidle')
+        # استخدام 'load' بدلاً من 'networkidle' لتجنب أخطاء الوقت المستقطع
+        page.goto('https://www.filgoal.com/matches/', timeout=60000, wait_until='load')
+        page.wait_for_timeout(4000) # انتظار إضافي لضمان ظهور العناصر
         
         print("جاري تنظيف الصفحة وإزالة المساحات البيضاء...")
         page.evaluate('''
@@ -33,7 +34,7 @@ def capture_and_save_locally():
                 ];
                 document.querySelectorAll(selectorsToRemove.join(',')).forEach(el => el.remove());
                 
-                // 3. مسح المساحات البيضاء العلوية بالكامل وتوحيد الخلفية باللون الأسود لتناسب تطبيقك
+                // مسح المساحات البيضاء العلوية بالكامل وتوحيد الخلفية
                 document.body.style.backgroundColor = '#1E1E1E';
                 document.documentElement.style.backgroundColor = '#1E1E1E';
                 
@@ -45,21 +46,18 @@ def capture_and_save_locally():
             }
         ''')
         
-        page.wait_for_timeout(1000)
+        page.wait_for_timeout(1500)
         
         print("جاري الضغط على زر القائمة الكاملة...")
-        # 4. طريقة صارمة لإجبار السكربت على النقر على السهم الموجود أسفل الجدول
         page.evaluate('''
             () => {
                 let container = document.querySelector('.matches-day-container');
                 if (container) {
-                    // زر التوسيع في موقع في الجول يكون دائماً آخر عنصر داخل الصندوق
                     let lastElement = container.lastElementChild;
                     if (lastElement) {
                         lastElement.click(); 
                     }
                     
-                    // تأكيد إضافي عبر البحث عن السهم (SVG)
                     let svgs = container.querySelectorAll('svg');
                     if (svgs.length > 0) {
                         let btn = svgs[svgs.length - 1].closest('a, div, button');
@@ -69,13 +67,12 @@ def capture_and_save_locally():
             }
         ''')
         
-        # انتظار 3 ثوانٍ حتى تفتح القائمة بالكامل بحركتها البطيئة
+        # انتظار حتى تفتح القائمة بالكامل
         page.wait_for_timeout(3000)
         
         print("جاري التقاط صورة جدول المباريات الكامل...")
         try:
             matches_box = page.locator('.matches-day-container').first
-            # التقاط صورة للصندوق الصافي بدون هوامش خارجية
             matches_box.screenshot(path=image_filename)
         except Exception as e:
             print(f"حدث خطأ في تحديد الصندوق، سيتم التقاط الصفحة: {e}")

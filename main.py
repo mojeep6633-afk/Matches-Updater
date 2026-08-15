@@ -4,50 +4,51 @@ from playwright.sync_api import sync_playwright
 def capture_and_save_locally():
     image_filename = 'daily_matches.png'
 
-    print("بدء تصوير موقع بطولات...")
+    print("بدء تصوير الجدول (بتوقيت السعودية)...")
     
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         
+        # إضافة Timezone لتوقيت السعودية لضمان دقة الساعة
         context = browser.new_context(
-            viewport={'width': 450, 'height': 2000},
-            device_scale_factor=3,
-            user_agent='Mozilla/5.0 (Linux; Android 11) AppleWebKit/537.36 KHTML Mobile Safari'
+            viewport={'width': 450, 'height': 3000},
+            timezone_id='Asia/Riyadh', 
+            device_scale_factor=2,
+            user_agent='Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Mobile/15E148 Safari/604.1'
         )
         
         page = context.new_page()
         page.goto('https://mobile.btolat.com/matches-score', timeout=60000, wait_until='load')
-        page.wait_for_timeout(3000)
+        page.wait_for_timeout(5000)
         
-        print("جاري تنظيف النتائج اللحظية والإبقاء على التوقيت...")
+        print("جاري التنظيف الشامل...")
         page.evaluate('''
             () => {
-                // إخفاء النتيجة اللحظية فقط (مثل 0-0، 1-0)
-                // وإخفاء الدقائق المتغيرة (مثل 55'، استراحة)
-                const selectorsToHide = [
-                    '.match-score',    // هذه تخفي النتيجة 0-0
-                    '.match-minute',   // هذه تخفي 55'
-                    '.match-state',    // هذه تخفي كلمة "استراحة" أو "مباشر"
-                    '.live-label'      // أي علامة تدل على البث المباشر
+                // إخفاء كافة العناصر التي تحمل نتائج أو دقائق أو حالة
+                const elementsToHide = [
+                    '.match-score', '.match-minute', '.match-state', 
+                    '.live-label', '.ico-clock', '.m-status',
+                    '.app-banner-wrapper', '.ads-container'
                 ];
                 
-                selectorsToHide.forEach(selector => {
+                elementsToHide.forEach(selector => {
                     document.querySelectorAll(selector).forEach(el => el.style.display = 'none');
                 });
                 
-                // إزالة الإعلانات
-                document.querySelectorAll('iframe, .ads-container').forEach(el => el.remove());
+                // إخفاء أي أيقونات إضافية في صف المباراة
+                document.querySelectorAll('svg').forEach(el => {
+                    if (el.closest('.match-info')) el.style.display = 'none';
+                });
             }
         ''')
         
         page.wait_for_timeout(2000)
         
-        print("جاري التقاط الجدول الصافي مع التوقيت...")
+        print("جاري التقاط الصورة...")
         page.screenshot(path=image_filename, full_page=True)
-            
         browser.close()
         
-    print(f"تم التقاط الصورة بنجاح!")
+    print(f"تم التقاط الصورة بنجاح وبتوقيت مكة المكرمة!")
 
 if __name__ == '__main__':
     capture_and_save_locally()

@@ -9,7 +9,7 @@ def capture_and_save_locally():
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         
-        # شاشة وهمية طويلة لضمان ظهور كل المباريات وزر التوسيع
+        # إعداد شاشة وهمية
         context = browser.new_context(
             viewport={'width': 450, 'height': 2000},
             device_scale_factor=3,
@@ -19,14 +19,12 @@ def capture_and_save_locally():
         page = context.new_page()
         print("جاري الدخول إلى موقع في الجول...")
         
-        # استخدام 'load' بدلاً من 'networkidle' لتجنب أخطاء الوقت المستقطع
         page.goto('https://www.filgoal.com/matches/', timeout=60000, wait_until='load')
-        page.wait_for_timeout(4000) # انتظار إضافي لضمان ظهور العناصر
+        page.wait_for_timeout(4000)
         
-        print("جاري تنظيف الصفحة وإزالة المساحات البيضاء...")
+        print("جاري تنظيف الصفحة وإزالة الزوائد...")
         page.evaluate('''
             () => {
-                // إزالة الإعلانات ومشغلات الفيديو
                 const selectorsToRemove = [
                     'iframe', '.ad', '.ads', '[id^="div-gpt-ad"]', 
                     'header', 'footer', '.navbar', '.app-download-banner', 
@@ -34,48 +32,42 @@ def capture_and_save_locally():
                 ];
                 document.querySelectorAll(selectorsToRemove.join(',')).forEach(el => el.remove());
                 
-                // مسح المساحات البيضاء العلوية بالكامل وتوحيد الخلفية
+                // توحيد الخلفية وإزالة المساحات البيضاء العلوية
                 document.body.style.backgroundColor = '#1E1E1E';
                 document.documentElement.style.backgroundColor = '#1E1E1E';
-                
-                let mainWrapper = document.querySelector('.main-wrapper') || document.body;
-                if(mainWrapper) {
-                    mainWrapper.style.paddingTop = '0';
-                    mainWrapper.style.marginTop = '0';
-                }
             }
         ''')
         
-        page.wait_for_timeout(1500)
-        
-        print("جاري الضغط على زر القائمة الكاملة...")
-        page.evaluate('''
-            () => {
-                let container = document.querySelector('.matches-day-container');
-                if (container) {
-                    let lastElement = container.lastElementChild;
-                    if (lastElement) {
-                        lastElement.click(); 
+        print("جاري النقر المباشر على زر إظهار المباريات الكاملة...")
+        try:
+            # محاولة النقر على زر السهم مباشرة عبر محدد دقيق في Playwright
+            # البحث عن أي عنصر يحتوي على أيقونة السهم أو كلمة المزيد في قسم المباريات
+            expand_btn = page.locator('.matches-day-container svg, .matches-day-container .ico-arrow-down, [class*="arrow"]').last
+            if expand_btn.is_visible():
+                expand_btn.click()
+                print("تم النقر على زر التوسيع بنجاح!")
+            else:
+                # طريقة بديلة عبر JavaScript في حال لم يظهر عبر القائمة
+                page.evaluate('''
+                    () => {
+                        let svgs = document.querySelectorAll('.matches-day-container svg');
+                        if (svgs.length > 0) {
+                            svgs[svgs.length - 1].dispatchEvent(new MouseEvent('click', { bubbles: true }));
+                        }
                     }
-                    
-                    let svgs = container.querySelectorAll('svg');
-                    if (svgs.length > 0) {
-                        let btn = svgs[svgs.length - 1].closest('a, div, button');
-                        if (btn) btn.click();
-                    }
-                }
-            }
-        ''')
-        
-        # انتظار حتى تفتح القائمة بالكامل
-        page.wait_for_timeout(3000)
+                ''')
+        except Exception as e:
+            print(f"ملاحظة أثناء محاولة النقر: {e}")
+            
+        # انتظار حتى تفتح القائمة بالكامل وتظهر كل المباريات
+        page.wait_for_timeout(4000)
         
         print("جاري التقاط صورة جدول المباريات الكامل...")
         try:
             matches_box = page.locator('.matches-day-container').first
             matches_box.screenshot(path=image_filename)
         except Exception as e:
-            print(f"حدث خطأ في تحديد الصندوق، سيتم التقاط الصفحة: {e}")
+            print(f"حدث خطأ في تحديد الصندوق، التقاط الشاشة العامة: {e}")
             page.screenshot(path=image_filename, full_page=True)
             
         browser.close()

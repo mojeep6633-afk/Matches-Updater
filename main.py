@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright
 def capture_and_save_locally():
     image_filename = 'daily_matches.png'
 
-    print("بدء تصوير الجدول والتخلص النهائي من الإعلانات والنوافذ...")
+    print("بدء تصوير الجدول (مع الحفاظ على الشعارات والمعلقين)...")
     
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -18,43 +18,30 @@ def capture_and_save_locally():
         
         page = context.new_page()
         page.goto('https://mobile.btolat.com/matches-score', timeout=60000, wait_until='load')
+        page.wait_for_timeout(5000)
         
-        # الانتظار قليلاً لتحميل العناصر ثم تنفيذ التنظيف المكثف
-        page.wait_for_timeout(4000)
-        
-        print("تنظيف العناصر وإزالة الإعلانات البيضاء وزر اكتشف المزيد...")
+        print("تنظيف النتائج والدقائق والإعلانات فقط...")
         page.evaluate('''
             () => {
-                // دالة شاملة لمسح كافة الإعلانات، النتائج، الدقائق، والنوافذ المتكررة
-                const cleanPage = () => {
-                    const unwantedSelectors = [
-                        '.match-score', '.match-minute', '.match-state', 
-                        '.live-label', '.ico-clock', '.m-status',
-                        'header', 'footer', '.app-banner-wrapper', 
-                        '.ads-container', 'iframe', 'nav',
-                        '[class*="banner"]', '[class*="footer"]', 
-                        '[class*="load-more"]', '[id*="load-more"]',
-                        '[class*="ad"]', '[id*="ad"]', '.popup', '.overlay'
-                    ];
-                    
-                    unwantedSelectors.forEach(selector => {
-                        document.querySelectorAll(selector).forEach(el => el.remove());
-                    });
-
-                    // إزالة أي عناصر تحتوي على جمل مزعجة مثل "اكتشف المزيد"
-                    document.querySelectorAll('div, a, span, button').forEach(el => {
-                        if (el.children.length === 0 && el.textContent.includes('اكتشف المزيد')) {
-                            el.remove();
-                        }
-                    });
-                };
-
-                // تشغيل التنظيف فوراً
-                cleanPage();
+                // إخفاء النتائج اللحظية والدقائق وحالة المباراة والإعلانات فقط
+                const exactElementsToHide = [
+                    '.match-score',    // نتيجة المباراة (مثلا 0-0)
+                    '.match-minute',   // دقائق المباريات
+                    '.match-state',    // حالة المباراة (انتهت / لم تبدأ)
+                    '.live-label',     // علامة مباشر
+                    'header',          // الهيدر العلوي
+                    'footer',          // الفوتر السفلي
+                    '.app-banner-wrapper', // إعلان التطبيق
+                    '.ads-container',
+                    'iframe',
+                    '[class*="load-more"]' // زر اكتشف المزيد
+                ];
                 
-                // إعادة التنظيف عدة مرات لضمان عدم ظهور أي إعلان متأخر
-                setTimeout(cleanPage, 1000);
-                setTimeout(cleanPage, 2000);
+                exactElementsToHide.forEach(selector => {
+                    document.querySelectorAll(selector).forEach(el => {
+                        el.style.display = 'none';
+                    });
+                });
             }
         ''')
         
@@ -72,7 +59,7 @@ def capture_and_save_locally():
             
         browser.close()
         
-    print(f"تم التقاط الصورة وتصفيتها بنجاح تام!")
+    print(f"تم التقاط الصورة بنجاح مع الشعارات والمعلقين!")
 
 if __name__ == '__main__':
     capture_and_save_locally()

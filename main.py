@@ -4,7 +4,7 @@ from playwright.sync_api import sync_playwright
 def capture_and_save_locally():
     image_filename = 'daily_matches.png'
 
-    print("بدء تصوير الجدول وتنظيف الشاشة بالكامل...")
+    print("بدء تصوير الجدول والتخلص النهائي من الإعلانات والنوافذ...")
     
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -18,48 +18,49 @@ def capture_and_save_locally():
         
         page = context.new_page()
         page.goto('https://mobile.btolat.com/matches-score', timeout=60000, wait_until='load')
-        page.wait_for_timeout(5000)
         
-        print("جاري إزالة الإعلانات، اسم الموقع، النوافذ العشوائية، وحقوق النشر...")
+        # الانتظار قليلاً لتحميل العناصر ثم تنفيذ التنظيف المكثف
+        page.wait_for_timeout(4000)
+        
+        print("تنظيف العناصر وإزالة الإعلانات البيضاء وزر اكتشف المزيد...")
         page.evaluate('''
             () => {
-                // قائمة بالعناصر المزعجة المراد إزالتها نهائياً من الصفحة
-                const unwantedSelectors = [
-                    '.match-score',       // النتائج اللحظية
-                    '.match-minute',      // الدقائق
-                    '.match-state',       // حالة المباراة (انتهت/لم تبدأ)
-                    '.live-label',
-                    '.ico-clock',
-                    '.m-status',
-                    'header',             // الهيدر العلوي (اسم الموقع وشعاره)
-                    'footer',             // الفوتر السفلي (جميع الحقوق محفوظة)
-                    '.app-banner-wrapper',// إعلان التطبيق العلوي
-                    '.ads-container',     // الحاويات الإعلانية
-                    'iframe',
-                    'nav',
-                    '[class*="banner"]',  // أي بنر إعلاني أو ترويجي
-                    '[class*="footer"]',  // أي حقوق نشر سفلية
-                    '[class*="load-more"]', // زر أو نافذة "اكتشف المزيد"
-                    '[id*="load-more"]'
-                ];
-                
-                unwantedSelectors.forEach(selector => {
-                    document.querySelectorAll(selector).forEach(el => el.remove());
-                });
+                // دالة شاملة لمسح كافة الإعلانات، النتائج، الدقائق، والنوافذ المتكررة
+                const cleanPage = () => {
+                    const unwantedSelectors = [
+                        '.match-score', '.match-minute', '.match-state', 
+                        '.live-label', '.ico-clock', '.m-status',
+                        'header', 'footer', '.app-banner-wrapper', 
+                        '.ads-container', 'iframe', 'nav',
+                        '[class*="banner"]', '[class*="footer"]', 
+                        '[class*="load-more"]', '[id*="load-more"]',
+                        '[class*="ad"]', '[id*="ad"]', '.popup', '.overlay'
+                    ];
+                    
+                    unwantedSelectors.forEach(selector => {
+                        document.querySelectorAll(selector).forEach(el => el.remove());
+                    });
 
-                // إزالة أي عناصر نصية تحتوي على عبارة "اكتشف المزيد" أو "جميع الحقوق"
-                document.querySelectorAll('*').forEach(el => {
-                    if (el.children.length === 0 && (el.textContent.includes('اكتشف المزيد') || el.textContent.includes('جميع الحقوق'))) {
-                        el.remove();
-                    }
-                });
+                    // إزالة أي عناصر تحتوي على جمل مزعجة مثل "اكتشف المزيد"
+                    document.querySelectorAll('div, a, span, button').forEach(el => {
+                        if (el.children.length === 0 && el.textContent.includes('اكتشف المزيد')) {
+                            el.remove();
+                        }
+                    });
+                };
+
+                // تشغيل التنظيف فوراً
+                cleanPage();
+                
+                // إعادة التنظيف عدة مرات لضمان عدم ظهور أي إعلان متأخر
+                setTimeout(cleanPage, 1000);
+                setTimeout(cleanPage, 2000);
             }
         ''')
         
         page.wait_for_timeout(2000)
         
         print("جاري التقاط الصورة النظيفة...")
-        # تصوير حاوية المباريات الأساسية فقط لتجنب أي فراغات طولية
         try:
             main_content = page.locator('.matches-score-body, .container, main').first
             if main_content.is_visible():
@@ -71,7 +72,7 @@ def capture_and_save_locally():
             
         browser.close()
         
-    print(f"تم التقاط الصورة بنجاح وتصفيتها بالكامل!")
+    print(f"تم التقاط الصورة وتصفيتها بنجاح تام!")
 
 if __name__ == '__main__':
     capture_and_save_locally()
